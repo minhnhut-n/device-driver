@@ -8,6 +8,8 @@
 #include "rf24_info_reg.h"
 #include "stm32f1xx_hal.h"
 #include "stdbool.h"
+#include <string.h>
+#include <stdio.h>
 
 #ifndef INC_RF24_LIB_H_
 #define INC_RF24_LIB_H_
@@ -17,20 +19,21 @@ typedef struct {
 	SPI_HandleTypeDef *hspi;
 
 	GPIO_TypeDef *cePort;
-	uint8_t cePin;
+	uint16_t cePin;
 
 	GPIO_TypeDef *csnPort;
-	uint8_t csnPin;
+	uint16_t csnPin;
 } RF24_Config;
 
 typedef struct {
 	RF24_Config cfg;
 	uint8_t pipe;
 	uint8_t channel;
-	uint8_t addr[ADDR_SIZE];
+	uint8_t baudrate;
+	uint8_t addr_len;
 
-	uint8_t tx_addr[5];
-	uint8_t rx_addr[5];
+	uint8_t tx_addr[MAX_FRAME_DATA];
+	uint8_t rx_addr[MAX_FRAME_DATA];
 } RF24_Handle;
 
 
@@ -40,6 +43,11 @@ typedef struct {
  * data as pointer unit8_t, it can be array[] or single byte
  */
 void rf24_write_config(RF24_Handle *rf,  uint8_t reg, uint8_t data);
+
+/*
+ * Write multi-configuration data into RF24 for transmission
+ * data as pointer unit8_t, it can be array[] or single byte
+ */
 void rf24_write_multi_config(RF24_Handle *rf,  uint8_t reg, uint8_t* data, uint8_t size);
 
 /*
@@ -47,7 +55,7 @@ void rf24_write_multi_config(RF24_Handle *rf,  uint8_t reg, uint8_t* data, uint8
  * data as pointer unit8_t, it can be array[] or single byte
  * write to pay load with multiple data
  */
-void rf24_write_data(RF24_Handle *rf, uint8_t data, uint8_t size);
+void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size);
 
 /*
  * Read configuration data into RF24 for transmission
@@ -62,6 +70,13 @@ uint8_t rf24_read_config(RF24_Handle *rf, uint8_t reg);
  * read data with multiple byte.
  */
 void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size);
+
+/*
+ * Read user configuration RF24
+ * data as pointer unit8_t, it can be array[] or single byte
+ * read data with multiple byte.
+ */
+void rf24_read_multi(RF24_Handle *rf, uint8_t reg, uint8_t *buf, uint8_t size);
 
 /*
  * Check size of data is coming
@@ -79,5 +94,11 @@ bool rf24_isDataReady(RF24_Handle *rf);
  */
 void rf24_init(RF24_Handle *rf, uint8_t mode);
 
+
+/*
+ * DEBUG FUNCTION
+ */
+void print_reg(const char *name, uint8_t value);
+void print_addr(const char *name, uint8_t *addr, uint8_t len);
 
 #endif /* INC_RF24_LIB_H_ */

@@ -6,25 +6,91 @@
  */
 
 #include "rf24_lib.h"
+
+#define PIPE_LEN(pipe, addr_len) ((pipe <= RX_PIPE_ADDR_1) ? addr_len : 1)
+
+/* Helper to assert/deassert CSN */
+static inline void csn_low(RF24_Handle *rf) {
+    HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, GPIO_PIN_RESET);
+}
+static inline void csn_high(RF24_Handle *rf) {
+    HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, GPIO_PIN_SET);
+}
+
+/* Helper to pulse CE (not used heavily here but provided) */
+static inline void ce_high(RF24_Handle *rf) {
+    HAL_GPIO_WritePin(rf->cfg.cePort, rf->cfg.cePin, GPIO_PIN_SET);
+}
+static inline void ce_low(RF24_Handle *rf) {
+    HAL_GPIO_WritePin(rf->cfg.cePort, rf->cfg.cePin, GPIO_PIN_RESET);
+}
+
+static void rf24_set_rx_addr(RF24_Handle *rf) {
+	uint8_t cmd = W_REG;
+	switch (rf->pipe) {
+		case RX_PIPE_ADDR_0:
+			cmd |= RX_PIPE_ADDR_0;
+			break;
+		case RX_PIPE_ADDR_1:
+			cmd |= RX_PIPE_ADDR_1;
+			break;
+		case RX_PIPE_ADDR_2:
+			cmd |= RX_PIPE_ADDR_2;
+			break;
+		case RX_PIPE_ADDR_3:
+			cmd |= RX_PIPE_ADDR_3;
+			break;
+		case RX_PIPE_ADDR_4:
+			cmd |= RX_PIPE_ADDR_4;
+			break;
+		case RX_PIPE_ADDR_5:
+			cmd |= RX_PIPE_ADDR_5;
+			break;
+		default:
+			break;
+	}
+
+	rf24_write_multi_config(rf, cmd, rf->rx_addr, PIPE_LEN(rf->pipe, rf->addr_len));
+}
+
+static void rf24_set_tx_addr(RF24_Handle *rf) {
+    uint8_t cmd = W_REG | TX_ADDR;
+    rf24_write_multi_config(rf, cmd, rf->tx_addr, rf->addr_len);
+}
+
 /*
  * Write configuration data into RF24 for transmission
  * data as pointer unit8_t, it can be array[] or single byte
  */
 void rf24_write_config(RF24_Handle *rf,  uint8_t reg, uint8_t data) {
-	uint8_t cmd = W_REG | reg;
+	uint8_t cmd = W_REG | (reg & 0x1F); //for ensuring reg not over 5 bits
+    uint8_t tx[2] = { cmd, data }; // second byte clocks out register
+    uint8_t rx[2] = {0}; // 1 byte left for exit line
 
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 0);
-	HAL_SPI_Transmit(rf->cfg.hspi, &cmd, 1, 1);
-	HAL_SPI_Transmit(rf->cfg.hspi, &data, 1, 1);
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 1);
+	csn_low(rf);
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, tx, rx, 2, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("Error when write config \r\n");
+    }
+	csn_high(rf);
 }
 void rf24_write_multi_config(RF24_Handle *rf,  uint8_t reg, uint8_t* data, uint8_t size) {
-	uint8_t cfg = W_REG | reg;
+    if (size == 0) return;
+    uint8_t cmd = W_REG | (reg & 0x1F);
 
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 0);
-	HAL_SPI_Transmit(rf->cfg.hspi, &cfg, 1, 1);
-	HAL_SPI_Transmit(rf->cfg.hspi, data, size, 10);
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 1);
+    uint8_t status = 0;
+
+	csn_low(rf);
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT);
+    if (status == 0x00) {
+    	printf("[RF24] device-died\r\n");
+    }
+
+    for (uint8_t i = 0; i < size; ++i) {
+        uint8_t dout = data[i];
+        uint8_t din = 0;
+        HAL_SPI_TransmitReceive(rf->cfg.hspi, &dout, &din, 1, RF_SPI_TIMEOUT);
+    }
+	csn_high(rf);
 }
 
 /*
@@ -33,12 +99,20 @@ void rf24_write_multi_config(RF24_Handle *rf,  uint8_t reg, uint8_t* data, uint8
  * write to pay load with multiple data
  */
 void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
-	uint8_t cfg = W_REG | W_PAY_LOAD;
+	uint8_t cmd = W_PAY_LOAD;
 
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 0);
-	HAL_SPI_Transmit(rf->cfg.hspi, &cfg, 1, 1);
-	HAL_SPI_Transmit(rf->cfg.hspi, data, size, 10);
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 1);
+	csn_low(rf);
+    uint8_t status;
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT);
+    if (status == 0x00) {
+    	printf("[RF24] device-died\r\n");
+    }
+
+    for (uint8_t i = 0; i < size; i++) {
+        uint8_t dout = data[i], din;
+        HAL_SPI_TransmitReceive(rf->cfg.hspi, &dout, &din, 1, RF_SPI_TIMEOUT);
+    }
+	csn_high(rf);
 }
 
 /*
@@ -47,15 +121,17 @@ void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
  * read configuration with 1 byte.
  */
 uint8_t rf24_read_config(RF24_Handle *rf, uint8_t reg) {
-	uint8_t cmd = R_REG | reg;
-	uint8_t rtn = 0;
+	uint8_t cmd = R_REG | (reg & 0x1F); //for ensuring reg not over 5 bits
+    uint8_t tx[2] = { cmd, 0xFF }; // second byte clocks out register
+    uint8_t rx[2] = {0}; // 1 byte left for exit line
 
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 0);
-	HAL_SPI_Transmit(rf->cfg.hspi, &cmd, 1, 1);
-	HAL_SPI_Receive(rf->cfg.hspi, &rtn, 1, 1);
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 1);
+	csn_low(rf);
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, tx, rx, 2, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("Error when read config \r\n");
+    }
+	csn_high(rf);
 
-	return rtn;
+	return rx[1];
 }
 
 /*
@@ -64,12 +140,46 @@ uint8_t rf24_read_config(RF24_Handle *rf, uint8_t reg) {
  * read data with multiple byte.
  */
 void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size) {
-	uint8_t cfg = R_REG | R_PAY_LOAD;
+	uint8_t cmd = R_PAY_LOAD;
 
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 0);
-	HAL_SPI_Transmit(rf->cfg.hspi, &cfg, 1, 1);
-	HAL_SPI_Receive(rf->cfg.hspi, buffer, size, 10);
-	HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, 1);
+    uint8_t status;
+
+	csn_low(rf);
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT);
+    for (uint8_t i = 0; i < size; i++) {
+        uint8_t dout = 0xFF, din;
+        HAL_SPI_TransmitReceive(rf->cfg.hspi, &dout, &din, 1, RF_SPI_TIMEOUT);
+        buffer[i] = din;
+    }
+	csn_high(rf);
+}
+
+/*
+ * Read user configuration RF24
+ * data as pointer unit8_t, it can be array[] or single byte
+ * read data with multiple byte.
+ */
+void rf24_read_multi(RF24_Handle *rf, uint8_t reg, uint8_t *buf, uint8_t size)
+{
+	if (size == 0) return;
+	uint8_t cmd = R_REG | (reg & 0x1F); //for ensuring reg not over 5 bits
+
+	//Check byte 1st (status) to know system state
+    uint8_t status = 0;
+
+    HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, GPIO_PIN_RESET);
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT);
+    if (status == 0x00) {
+    	printf("[RF24] device-died\r\n");
+    }
+
+    while (size--) {
+        uint8_t dout = 0xFF; //dump byte
+        uint8_t din = 0;
+        HAL_SPI_TransmitReceive(rf->cfg.hspi, &dout, &din, 1, RF_SPI_TIMEOUT);
+        *buf++ = din;
+    }
+    HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, GPIO_PIN_SET);
 }
 
 /*
@@ -90,7 +200,18 @@ bool rf24_isDataReady(RF24_Handle *rf) {
  * Check size of data is coming
  */
 uint8_t rf24_rx_bufSize(RF24_Handle *rf) {
-	uint8_t value =	rf24_read_config(rf, (uint8_t)R_RX_PL_WID);
+	uint8_t value = 0;
+	uint8_t status = 0;
+	uint8_t cmd = R_RX_PL_WID;
+
+	csn_low(rf);
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT);
+    if (status == 0x00) {
+    	printf("[RF24] device-died\r\n");
+    }
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, (uint8_t[]){0xFF}, &value, 1, RF_SPI_TIMEOUT);
+	csn_high(rf);
+
 	return value;
 }
 
@@ -107,75 +228,61 @@ void rf24_switch_mode(RF24_Handle *rf, uint8_t mode) {
  * Initial for RF24 transmission with mode (TX/ RX)
  */
 void rf24_init(RF24_Handle *rf, uint8_t mode) {
-	uint8_t cmd = W_REG;
-	uint8_t data = 0;
+	printf("===============\r\n");
+	printf("rf->channel %d\r\n", rf->channel);
+	printf("rf->baudrate %d\r\n", rf->baudrate);
+	printf("rf->pipe %d\r\n", rf->pipe);
+	printf("rf->tx_addr %s\r\n", rf->tx_addr);
 
+	//low when write, high with rf24 listen others.
+	ce_low(rf);
 	//turn on auto feedback (auto ack), is only for high model, pay attention to it
 
 	//addr wide
-	cmd = W_REG;
-	cmd |= SET_ADDR_WID;
-	data = rf24_read_config(rf, (uint8_t)SET_ADDR_WID);
-	switch (ADDR_SIZE) {
-		case 3:
-			data |= 0x01; //3bytes = "vna";
-			break;
-		case 4:
-			data |= 0x10;
-			break;
-		case 5:
-			data |= 0x11;
-			break;
-		default:
-			break;
-	}
-	rf24_write_config(rf, cmd, data);
+	uint8_t addrWidth = rf->addr_len;
+    if (addrWidth < 3) addrWidth = 3;
+    if (addrWidth > 5) addrWidth = 5;
+
+	uint8_t data = rf24_read_config(rf, SET_ADDR_WID);
+	data &= ~0x03; //clear before set
+
+	data |= (addrWidth-2);
+	rf24_write_config(rf, SET_ADDR_WID, data);
 
 	//pipe
-	cmd = W_REG;
-	switch (rf->pipe) {
-		case RX_PIPE_ADDR_0:
-				cmd |= RX_PIPE_ADDR_0;
-				break;
-		case RX_PIPE_ADDR_1:
-				cmd |= RX_PIPE_ADDR_1;
-				break;
-		case RX_PIPE_ADDR_2:
-				cmd |= RX_PIPE_ADDR_2;
-				break;
-		case RX_PIPE_ADDR_3:
-				cmd |= RX_PIPE_ADDR_3;
-				break;
-		case RX_PIPE_ADDR_4:
-				cmd |= RX_PIPE_ADDR_4;
-				break;
-		case RX_PIPE_ADDR_5:
-				cmd |= RX_PIPE_ADDR_5;
-				break;
-		default:
-			break;
-	}
-	rf24_write_multi_config(rf, cmd, rf->addr, ADDR_SIZE);
+	if (mode == RX_MODE) rf24_set_rx_addr(rf);
+	else	  			 rf24_set_tx_addr(rf);
 
 	//channel
-	cmd = W_REG;
-	cmd |= SET_FREQ_CHA;
-	data = 9;
-	rf24_write_config(rf, cmd, data);
+	rf24_write_config(rf, SET_FREQ_CHA, rf->channel);
 
 	//	baudrate
-	cmd = W_REG;
-	cmd |= SET_REG_RATE;
-	data = 0x06;
-	rf24_write_config(rf, cmd, data);
+	rf24_write_config(rf, SET_REG_RATE, rf->baudrate);
 
 	//power on
-	cmd = W_REG;
-	cmd |= CONFIG_REG;
 	data = rf24_read_config(rf, (uint8_t)CONFIG_REG);
 	data |= (1<<1);
 	data = (data & 0xFE) | (mode << 0);
-	rf24_write_config(rf, cmd, data);
+	rf24_write_config(rf, CONFIG_REG, data);
 	HAL_Delay(2);
 
+    if(mode == RX_MODE)
+        ce_high(rf); //listening in rx mode
+}
+
+
+/*
+ * DEBUG FUNCTION
+ */
+void print_reg(const char *name, uint8_t value)
+{
+    printf("%s = 0x%02X\r\n", name, value);
+}
+void print_addr(const char *name, uint8_t *addr, uint8_t len)
+{
+    printf("%s = ", name);
+    for (int i = 0; i < len; i++)
+        printf("%02X ", addr[i]);
+
+    printf("\r\n");
 }

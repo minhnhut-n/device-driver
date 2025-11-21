@@ -62,6 +62,8 @@
 #define W_CONFIG		0
 #define RX_MODE			1
 #define TX_MODE			0
-#define ADDR_SIZE		3 //OPTIONS: 3, 4 or 5
+#define MAX_FRAME_DATA	5
+#define RF_SPI_TIMEOUT	15
+#define RX_PIPE_NULL_0	0
 
 #endif /* INC_RF24_INFO_REG_H_ */
