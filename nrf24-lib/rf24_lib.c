@@ -122,8 +122,13 @@ void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
  */
 uint8_t rf24_read_config(RF24_Handle *rf, uint8_t reg) {
 	uint8_t cmd = R_REG | (reg & 0x1F); //for ensuring reg not over 5 bits
-    uint8_t tx[2] = { cmd, 0xFF }; // second byte clocks out register
-    uint8_t rx[2] = {0}; // 1 byte left for exit line
+
+    /*
+     * 2 phase: 1 is for first return STATUS, 2 is for actual data
+     * for actual data we dump a NOP command (dont care), just for reading
+     */
+	uint8_t tx[2] = { cmd, NOP };
+    uint8_t rx[2] = {0};
 
 	csn_low(rf);
     if (HAL_SPI_TransmitReceive(rf->cfg.hspi, tx, rx, 2, RF_SPI_TIMEOUT) != HAL_OK) {
@@ -270,6 +275,46 @@ void rf24_init(RF24_Handle *rf, uint8_t mode) {
         ce_high(rf); //listening in rx mode
 }
 
+
+void rf24_factory_reset(RF24_Handle *rf) {
+	// Power down
+	rf24_write_config(rf, CONFIG_REG, 0x08);
+
+	rf24_write_config(rf, EN_AUTO_ACK, 0x3F);
+	rf24_write_config(rf, EN_RX_ADDR, 0x03);
+	rf24_write_config(rf, SET_ADDR_WID, 0x03);
+	rf24_write_config(rf, SET_AUTO_RETRS, 0x03);
+	rf24_write_config(rf, SET_FREQ_CHA, 0x02);
+	rf24_write_config(rf, SET_REG_RATE, 0x0F);
+
+	// Clear interrupts
+	rf24_write_config(rf, STATUS_REG, 0x70);
+
+	// FIFO reset
+	rf24_write_config(rf, FLUSH_TX, 0);
+	rf24_write_config(rf, FLUSH_RX, 0);
+
+	// Default addresses (5 bytes)
+	uint8_t addr_p0[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
+	uint8_t addr_p1[5] = {0xC2,0xC2,0xC2,0xC2,0xC2};
+
+	rf24_write_multi_config(rf, W_REG | RX_PIPE_ADDR_0, addr_p0, 5);
+	rf24_write_multi_config(rf, W_REG | TX_ADDR,        addr_p0, 5);
+	rf24_write_multi_config(rf, W_REG | RX_PIPE_ADDR_1, addr_p1, 5);
+
+	rf24_write_config(rf, RX_PIPE_ADDR_2, 0xC3);
+	rf24_write_config(rf, RX_PIPE_ADDR_3, 0xC4);
+	rf24_write_config(rf, RX_PIPE_ADDR_4, 0xC5);
+	rf24_write_config(rf, RX_PIPE_ADDR_5, 0xC6);
+
+	// Disable all payload widths
+	rf24_write_config(rf, RX_PW_P0, 0x00);
+	rf24_write_config(rf, RX_PW_P1, 0x00);
+	rf24_write_config(rf, RX_PW_P2, 0x00);
+	rf24_write_config(rf, RX_PW_P3, 0x00);
+	rf24_write_config(rf, RX_PW_P4, 0x00);
+	rf24_write_config(rf, RX_PW_P5, 0x00);
+}
 
 /*
  * DEBUG FUNCTION

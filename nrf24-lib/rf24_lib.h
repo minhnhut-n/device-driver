@@ -94,7 +94,10 @@ bool rf24_isDataReady(RF24_Handle *rf);
  */
 void rf24_init(RF24_Handle *rf, uint8_t mode);
 
-
+/*
+ * factory reset for rf24
+ */
+void rf24_factoy_reset(RF24_Handle *rf);
 /*
  * DEBUG FUNCTION
  */

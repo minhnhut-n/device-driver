@@ -101,7 +101,7 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  printf("\n=== BEFORE INIT ===\r\n");
+  printf("\n=== Start up function ===\r\n");
 
   //=============================
   // CONFIG YOUR RF24 HANDLE HERE
@@ -125,11 +125,11 @@ int main(void)
   uint8_t tx_before[5] = {0};
   rf24_read_multi(&rf_handle, TX_ADDR, tx_before, rf_handle.addr_len);
 
-  print_reg("SETUP_AW", wid_addr);
-  print_reg("RF_CH", freq_cha);
-  print_reg("RF_SETUP", set_reg);
-  print_reg("CONFIG", config_data);
-  print_addr("TX_ADDR", tx_before, rf_handle.addr_len);
+  print_reg("SETUP_AW"	, wid_addr);
+  print_reg("RF_CH"		, freq_cha);
+  print_reg("RF_SETUP"	, set_reg);
+  print_reg("CONFIG"	, config_data);
+  print_addr("TX_ADDR"	, tx_before, rf_handle.addr_len);
 
   memcpy(rf_handle.tx_addr, "vna", rf_handle.addr_len);
 
@@ -163,8 +163,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-//	  uint8_t status = rf24_read_config(&rf_handle, STATUS_REG);
-//	  printf("STATUS = 0x%02X\r\n", status);
+
+//	  rf24_factory_reset(&rf_handle);
+//	  rf24_write_config(&rf_handle, EN_RX_ADDR, 2);
+//	  printf("\nEN_RX_ADDR = 0x%02X\r\n", 1);
+//
+//	  uint8_t en = rf24_read_config(&rf_handle, EN_RX_ADDR);
+//	  printf("EN_RX_ADDR = 0x%02X\r\n", en);
+//
+//	  HAL_Delay(500);
 
   }
   /* USER CODE END 3 */
