@@ -1,7 +1,6 @@
 # Ignore build folders
 **/Debug/
 **/Release/
-*.metadata
 
 # Ignore Eclipse/IDE files
 *.launch
@@ -10,6 +9,9 @@
 *.settings/
 *.externalToolBuilders/
 *.mxproject
+.metadata/
+*build/
+*.settings
 
 # # Ignore CubeMX generated files (optional)
 # *.ioc
