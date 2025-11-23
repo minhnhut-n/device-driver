@@ -61,8 +61,8 @@ all: main-build
 main-build: rf24-master-stm.elf secondary-outputs
 
 # Tool invocations
-rf24-master-stm.elf rf24-master-stm.map: $(OBJS) $(USER_OBJS) D:\4_Project\drone\stm\rf24-master-stm\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "rf24-master-stm.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"D:\4_Project\drone\stm\rf24-master-stm\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="rf24-master-stm.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+rf24-master-stm.elf rf24-master-stm.map: $(OBJS) $(USER_OBJS) E:\gitRepos\device-driver\nrf24-lib\rf24-master-stm\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "rf24-master-stm.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"E:\gitRepos\device-driver\nrf24-lib\rf24-master-stm\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="rf24-master-stm.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

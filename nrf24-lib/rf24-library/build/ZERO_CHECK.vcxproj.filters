@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="E:\gitRepos\device-driver\nrf24-lib\rf24-library\build\CMakeFiles\d4862377097dbc52a553dc3915bec14e\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{A53331C3-B8BB-3C35-8928-1D936DC273CC}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

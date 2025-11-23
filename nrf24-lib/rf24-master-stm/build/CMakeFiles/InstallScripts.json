@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"E:/gitRepos/device-driver/nrf24-lib/rf24-library/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
