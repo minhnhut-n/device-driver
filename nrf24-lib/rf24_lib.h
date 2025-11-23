@@ -20,6 +20,7 @@ typedef struct {
 
 	GPIO_TypeDef *cePort;
 	uint16_t cePin;
+	bool ce_status;
 
 	GPIO_TypeDef *csnPort;
 	uint16_t csnPin;
@@ -35,8 +36,6 @@ typedef struct {
 	uint8_t tx_addr[MAX_FRAME_DATA];
 	uint8_t rx_addr[MAX_FRAME_DATA];
 } RF24_Handle;
-
-
 
 /*
  * Write configuration data into RF24 for transmission

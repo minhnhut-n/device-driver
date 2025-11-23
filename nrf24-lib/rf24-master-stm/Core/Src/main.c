@@ -59,8 +59,8 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 RF24_Handle rf_handle;
+const uint8_t address[5] = {'v','n','a','m','n'};
 
 int _write(int file, char *ptr, int len)
 {
@@ -107,11 +107,11 @@ int main(void)
   //=============================
   // CONFIG YOUR RF24 HANDLE HERE
   //=============================
-  rf_handle.pipe          = RX_PIPE_NULL_0;
+  rf_handle.pipe          = RX_PIPE_ADDR_0;
   rf_handle.channel       = 9;
   rf_handle.baudrate      = 0x06;
-  rf_handle.addr_len      = 4;
-  memcpy(rf_handle.tx_addr, "vna", rf_handle.addr_len);
+  rf_handle.addr_len      = 5;
+  memcpy(rf_handle.tx_addr, address, rf_handle.addr_len);
   rf_handle.cfg.cePin  	= CE_Pin;
   rf_handle.cfg.cePort 	= CE_GPIO_Port;
   rf_handle.cfg.csnPin 	= CS_Pin;
@@ -139,6 +139,8 @@ int main(void)
   print_addr("TX_ADDR", tx_after, rf_handle.addr_len);
 
   uint8_t count = 0;
+  rf_handle.cfg.ce_status = true;
+  HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
   /* Infinite loop */

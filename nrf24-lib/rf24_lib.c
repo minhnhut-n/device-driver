@@ -8,8 +8,6 @@
 #include "rf24_lib.h"
 
 #define PIPE_LEN(pipe, addr_len) ((pipe <= RX_PIPE_ADDR_1) ? addr_len : 1)
-
-static bool ce_status = false;
 /* Helper to assert/deassert CSN */
 static inline void csn_low(RF24_Handle *rf) {
     HAL_GPIO_WritePin(rf->cfg.csnPort, rf->cfg.csnPin, GPIO_PIN_RESET);
@@ -20,11 +18,11 @@ static inline void csn_high(RF24_Handle *rf) {
 
 /* Helper to pulse CE (not used heavily here but provided) */
 static inline void ce_high(RF24_Handle *rf) {
-	ce_status = true;
+	rf->cfg.ce_status = true;
     HAL_GPIO_WritePin(rf->cfg.cePort, rf->cfg.cePin, GPIO_PIN_SET);
 }
 static inline void ce_low(RF24_Handle *rf) {
-	ce_status = false;
+	rf->cfg.ce_status = false;
     HAL_GPIO_WritePin(rf->cfg.cePort, rf->cfg.cePin, GPIO_PIN_RESET);
 }
 
@@ -112,7 +110,7 @@ void rf24_write_multi_config(RF24_Handle *rf,  uint8_t reg, uint8_t* data, uint8
  * write to pay load with multiple data
  */
 void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
-	bool prev_ce = ce_status;
+	bool prev_ce = rf->cfg.ce_status;
 	if (prev_ce) ce_low(rf);
 	uint8_t cmd = W_PAY_LOAD;
 
@@ -125,10 +123,9 @@ void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
 
     for (uint8_t i = 0; i < size; i++) {
         uint8_t dout = data[i], din;
-        printf("Data send: 0x%02X", dout);
+        printf("Data send: 0x%02X\r\n", dout);
         HAL_SPI_TransmitReceive(rf->cfg.hspi, &dout, &din, 1, RF_SPI_TIMEOUT);
     }
-	csn_high(rf);
 
 	if (prev_ce) ce_high(rf);
 	HAL_Delay(1); // ---> Need to improve ( can reduce less 10 times)
@@ -152,6 +149,8 @@ void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
         }
         HAL_Delay(1);
     }
+
+    csn_high(rf);
     if (prev_ce) ce_high(rf);
 }
 
@@ -339,9 +338,9 @@ void rf24_factory_reset(RF24_Handle *rf) {
 	uint8_t addr_p0[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 	uint8_t addr_p1[5] = {0xC2,0xC2,0xC2,0xC2,0xC2};
 
-	rf24_write_multi_config(rf, W_REG | RX_PIPE_ADDR_0, addr_p0, 5);
-	rf24_write_multi_config(rf, W_REG | TX_ADDR,        addr_p0, 5);
-	rf24_write_multi_config(rf, W_REG | RX_PIPE_ADDR_1, addr_p1, 5);
+	rf24_write_multi_config(rf, RX_PIPE_ADDR_0, addr_p0, 5);
+	rf24_write_multi_config(rf, TX_ADDR,        addr_p0, 5);
+	rf24_write_multi_config(rf, RX_PIPE_ADDR_1, addr_p1, 5);
 
 	rf24_write_config(rf, RX_PIPE_ADDR_2, 0xC3);
 	rf24_write_config(rf, RX_PIPE_ADDR_3, 0xC4);
