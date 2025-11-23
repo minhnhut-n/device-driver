@@ -150,10 +150,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	printf("=====New session====\r\n");
 	char msg[] = "msg";
 	rf24_write_data(&rf_handle, (uint8_t*)msg, 3);
-	printf("TX sent: %s\r\n", msg);
+	printf("TX sent: %s\n", msg);
 
 	HAL_Delay(300);
   }

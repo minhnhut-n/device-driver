@@ -5,6 +5,7 @@
  *      Author: Aelius_Nguyen
  */
 
+#include <stdint.h>
 #include "rf24_info_reg.h"
 #include "stm32f1xx_hal.h"
 #include "stdbool.h"

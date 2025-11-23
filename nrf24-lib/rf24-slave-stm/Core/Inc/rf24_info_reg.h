@@ -56,6 +56,7 @@
 #define RX_PW_P4		0x15
 #define RX_PW_P5		0x16
 #define FIFO_STATUS     0x17
+#define FEATURE         0x1D
 
 //User config
 #define W_DATA			1

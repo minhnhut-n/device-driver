@@ -80,8 +80,7 @@ void rf24_write_config(RF24_Handle *rf,  uint8_t reg, uint8_t data) {
     uint8_t tx[2] = { cmd, data }; // second byte clocks out register
     uint8_t rx[2] = {0}; // 1 byte left for exit line
 
-    //debug
-    printf("Send register 0x%02X, data 0x%02X\r\n", reg, tx[1]);
+//    printf("Send register 0x%02X, data 0x%02X\r\n", reg, tx[1]);
 
 	csn_low(rf);
     if (HAL_SPI_TransmitReceive(rf->cfg.hspi, tx, rx, 2, RF_SPI_TIMEOUT) != HAL_OK) {
@@ -131,11 +130,9 @@ void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size) {
     }
 
 	if (prev_ce) ce_high(rf);
-	HAL_Delay(1); // ---> Need to improve ( can reduce less 10 times)
+	HAL_Delay(1); // Transmit pulse
 
-	//ACK PHASE
-	ce_low(rf);
-    // Wait for TX_DS or MAX_RT in STATUS
+	// Wait for TX_DS or MAX_RT in STATUS, keep CE high for ACK reception
     uint32_t timeout = 100; // ms timeout for safety
     while (timeout--) {
         uint8_t status_reg = rf24_read_config(rf, STATUS_REG);
@@ -307,6 +304,12 @@ void rf24_init(RF24_Handle *rf, uint8_t mode) {
 
 	//baud rate
 	rf24_write_config(rf, SET_REG_RATE, rf->baudrate);
+
+	//enable auto ack for pipe 0
+	rf24_write_config(rf, EN_AUTO_ACK, 0x01);
+
+	//enable dynamic payload length
+	rf24_write_config(rf, FEATURE, 0x04);
 
 	//power on
 	data = rf24_read_config(rf, (uint8_t)CONFIG_REG);

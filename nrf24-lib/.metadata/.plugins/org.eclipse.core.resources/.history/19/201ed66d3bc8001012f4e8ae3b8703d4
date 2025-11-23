@@ -376,4 +376,3 @@ void print_addr(const char *name, uint8_t *addr, uint8_t len)
         printf("%02X \t", addr[i]);
 
     printf("\r\n");
-}

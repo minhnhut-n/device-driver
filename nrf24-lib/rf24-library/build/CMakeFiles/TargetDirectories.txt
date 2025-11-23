@@ -1,3 +1,0 @@
-E:/gitRepos/device-driver/nrf24-lib/rf24-library/build/CMakeFiles/rf24-lib.dir
-E:/gitRepos/device-driver/nrf24-lib/rf24-library/build/CMakeFiles/ALL_BUILD.dir
-E:/gitRepos/device-driver/nrf24-lib/rf24-library/build/CMakeFiles/ZERO_CHECK.dir

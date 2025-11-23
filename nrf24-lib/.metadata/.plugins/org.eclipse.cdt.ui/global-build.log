@@ -1,22 +1,28 @@
-13:23:15 **** Incremental Build of configuration Debug for project rf24-slave-stm ****
+14:10:04 **** Incremental Build of configuration Debug for project rf24-master-stm ****
 make -j16 all 
-arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
 arm-none-eabi-gcc "../Core/Inc/rf24_lib.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Inc/rf24_lib.d" -MT"Core/Inc/rf24_lib.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Inc/rf24_lib.o"
-arm-none-eabi-gcc -o "rf24-slave-stm.elf" @"objects.list"   -mcpu=cortex-m3 -T"E:\gitRepos\device-driver\nrf24-lib\rf24-slave-stm\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="rf24-slave-stm.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
-Finished building target: rf24-slave-stm.elf
+arm-none-eabi-gcc -o "rf24-master-stm.elf" @"objects.list"   -mcpu=cortex-m3 -T"E:\gitRepos\device-driver\nrf24-lib\rf24-master-stm\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="rf24-master-stm.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: rf24-master-stm.elf
  
-arm-none-eabi-size  rf24-slave-stm.elf 
-arm-none-eabi-objdump -h -S rf24-slave-stm.elf  > "rf24-slave-stm.list"
+arm-none-eabi-size  rf24-master-stm.elf 
+arm-none-eabi-objdump -h -S rf24-master-stm.elf  > "rf24-master-stm.list"
    text	   data	    bss	    dec	    hex	filename
-  15136	    104	   2104	  17344	   43c0	rf24-slave-stm.elf
+  15244	    104	   2104	  17452	   442c	rf24-master-stm.elf
 Finished building: default.size.stdout
  
-Finished building: rf24-slave-stm.list
+Finished building: rf24-master-stm.list
  
-13:23:47 **** Incremental Build of configuration Debug for project rf24-master-stm ****
+14:10:05 **** Incremental Build of configuration Debug for project rf24-master-stm ****
 make -j16 all 
 arm-none-eabi-size  rf24-master-stm.elf 
    text	   data	    bss	    dec	    hex	filename
-  15252	    104	   2104	  17460	   4434	rf24-master-stm.elf
+  15244	    104	   2104	  17452	   442c	rf24-master-stm.elf
+Finished building: default.size.stdout
+ 
+14:10:32 **** Incremental Build of configuration Debug for project rf24-slave-stm ****
+make -j16 all 
+arm-none-eabi-size  rf24-slave-stm.elf 
+   text	   data	    bss	    dec	    hex	filename
+  15104	    104	   2104	  17312	   43a0	rf24-slave-stm.elf
 Finished building: default.size.stdout
  
