@@ -1,15 +1,25 @@
-# Build / Debug
+# Ignore build folders
 **/Debug/
 **/Release/
+*.metadata
 
-# IDE metadata
-.metadata/
-*
+# Ignore Eclipse/IDE files
+*.launch
+*.cproject
+*.project
+*.settings/
+*.externalToolBuilders/
+*.mxproject
 
-# Keep source files
+# # Ignore CubeMX generated files (optional)
+# *.ioc
+
+# Keep source headers and c files
 !**/Src/*.c
 !**/Core/Src/*.c
 !**/Inc/*.h
 !**/Core/Inc/*.h
+
+# Keep external library files
 !nrf24-lib/rf24-library/*.c
 !nrf24-lib/rf24-library/*.h
