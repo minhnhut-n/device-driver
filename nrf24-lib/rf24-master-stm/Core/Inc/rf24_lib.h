@@ -3,6 +3,9 @@
  *
  *  Created on: Nov 20, 2025
  *      Author: Aelius_Nguyen
+ *
+ *  This library have some configuration in RF24.h
+ *  About macro define
  */
 
 #include <stdint.h>
@@ -25,6 +28,8 @@ typedef struct {
 
 	GPIO_TypeDef *csnPort;
 	uint16_t csnPin;
+
+	uint8_t rf24_config_reg;
 } RF24_Config;
 
 typedef struct {
@@ -32,90 +37,209 @@ typedef struct {
 	uint8_t pipe;
 	uint8_t channel;
 	uint8_t baudrate;
+    bool dynamic_pay_load;
+    uint8_t payload_size;
+	
 	uint8_t addr_len;
+    uint8_t address[MAX_ADDRESS];
+    /**
+     * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
+     * that need to restore to it own pipe 0 data.
+    */
+	uint8_t pipe0_tx_addr[MAX_ADDRESS];
+    uint8_t pipe0_rx_addr[MAX_ADDRESS];
+    bool is_restore_pipe0_addr;
+    bool is_enable_payload_ack;
 
-	uint8_t tx_addr[MAX_FRAME_DATA];
-	uint8_t rx_addr[MAX_FRAME_DATA];
 } RF24_Handle;
 
 /**
- * function to change CE pin and update status
- * ce_high
  */
-void rf24_ce_high(RF24_Handle *rf);
+typedef enum
+{
+    /**
+     * (0) represents:
+     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
+     * :-------:|:-----------------------------:|:----------------------------:
+     *  -18 dBm | -6 dBm | -12 dBm
+     */
+    RF24_PA_MIN = 0,
+    /**
+     * (1) represents:
+     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
+     * :-------:|:-----------------------------:|:----------------------------:
+     *  -12 dBm | 0 dBm | -4 dBm
+     */
+    RF24_PA_LOW,
+    /**
+     * (2) represents:
+     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
+     * :-------:|:-----------------------------:|:----------------------------:
+     *  -6 dBm | 3 dBm | 1 dBm
+     */
+    RF24_PA_HIGH,
+    /**
+     * (3) represents:
+     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
+     * :-------:|:-----------------------------:|:----------------------------:
+     *  0 dBm | 7 dBm | 4 dBm
+     */
+    RF24_PA_MAX,
+    /**
+     * (4) This should not be used and remains for backward compatibility.
+     */
+    RF24_PA_ERROR
+} rf24_pa_dbm_e;
+
 /**
- * function to change CE pin and update status
- * ce_low
  */
-void rf24_ce_low(RF24_Handle *rf);
+typedef enum
+{
+    /** (0) represents 1 Mbps */
+    RF24_1MBPS = 0,
+    /** (1) represents 2 Mbps */
+    RF24_2MBPS,
+    /** (2) represents 250 kbps */
+    RF24_250KBPS
+} rf24_datarate_e;
 
-
-/* Command send to RF24 only*/
-void rf24_command(RF24_Handle *rf, uint8_t cmd);
-
-/*
- * Write configuration data into RF24 for transmission
- * data as pointer unit8_t, it can be array[] or single byte
+/**
  */
-void rf24_write_config(RF24_Handle *rf,  uint8_t reg, uint8_t data);
+typedef enum
+{
+    /** (0) represents no CRC checksum is used */
+    RF24_CRC_DISABLED = 0,
+    /** (1) represents CRC 8 bit checksum is used */
+    RF24_CRC_8,
+    /** (2) represents CRC 16 bit checksum is used */
+    RF24_CRC_16
+} rf24_crclength_e;
 
-/*
- * Write multi-configuration data into RF24 for transmission
- * data as pointer unit8_t, it can be array[] or single byte
+/**
  */
-void rf24_write_multi_config(RF24_Handle *rf,  uint8_t reg, uint8_t* data, uint8_t size);
-
-/*
- * Write user data into RF24 for transmission
- * data as pointer unit8_t, it can be array[] or single byte
- * write to pay load with multiple data
+typedef enum
+{
+    /// @brief The FIFO is not full nor empty, but it is occupied with 1 or 2 payloads.
+    RF24_FIFO_OCCUPIED,
+    /// @brief The FIFO is empty.
+    RF24_FIFO_EMPTY,
+    /// @brief The FIFO is full.
+    RF24_FIFO_FULL,
+    /// @brief Represents corruption of data over SPI (when observed).
+    RF24_FIFO_INVALID,
+} rf24_fifo_state_e;
+/**
  */
-void rf24_write_data(RF24_Handle *rf, uint8_t* data, uint8_t size);
+typedef enum
+{
+    /// An alias of `0` to describe no IRQ events enabled.
+    RF24_IRQ_NONE = 0,
+    /// Represents an event where TX Data Failed to send.
+    RF24_TX_DF = 1 << MASK_MAX_RT,
+    /// Represents an event where TX Data Sent successfully.
+    RF24_TX_DS = 1 << TX_DS,
+    /// Represents an event where RX Data is Ready to `RF24::read()`.
+    RF24_RX_DR = 1 << RX_DR,
+    /// Byte to clear all interrupt on previous section
+    RF24_IRQ_ALL = (1 << MASK_MAX_RT) | (1 << TX_DS) | (1 << RX_DR),
+} rf24_irq_flags_e;
 
-/*
- * Read configuration data into RF24 for transmission
- * data as pointer unit8_t, it can be array[] or single byte
- * read configuration with 1 byte.
+
+/**
+ * @brief helper function for stm32-spi purpose
+ * in this function, csn (chip select pin will go low to enable transmittion)
  */
-uint8_t rf24_read_config(RF24_Handle *rf, uint8_t reg);
+void spi_beginTransaction(RF24_Handle *rf);
+/**
+ * @brief helper function for stm32stm32-spi purpose
+ * in this function, csn (chip select pin will go high to disable transmittion)
+ */
+void spi_endTransaction(RF24_Handle *rf);
 
-/*
- * Read user data into RF24 for transmission
- * data as pointer unit8_t, it can be array[] or single byte
- * read data with multiple byte.
+/**
+ * @brief function for configuration rf24 struct
+ */
+void rf24_hw_config(RF24_Handle *rf, uint8_t ce_pin, GPIO_TypeDef *ce_port, uint8_t csn_pin,  GPIO_TypeDef *csn_port,\
+                    uint8_t rf_channel, uint8_t baudrate, uint8_t* addr, uint8_t _pipe, bool payLoadCondfig);
+/**
+ * @brief function support for writing configuration wih spi
+ */
+void rf24_write_reg(RF24_Handle *rf, uint8_t reg, const uint8_t *regData, uint8_t size);
+/**
+ * @brief function support for reading configuration wih spi
+ */
+void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
+
+/**
+ * =========================
+ * This function is for RF24
+ * =========================
+ */
+
+/**
+ * @brief Using SETUP_AW to check it is value or not.
+ * Value on this REG can be 1,2,3 respectively with 3,4,5 bytes
+ * So the offset is = -2
+ */
+bool isValid_AddrWidth(RF24_Handle *rf);
+
+/**
+ * @brief change pin CE logic and status
+ */
+void rf24_ce_pin(RF24_Handle *rf, bool status);
+
+/**
+ * @brief Configuration mode RX on RF24
+ */
+void rf24_rx_mode(RF24_Handle *rf);
+/**
+ * @brief Configuration mode TX on RF24
+ */
+void rf24_tx_mode(RF24_Handle *rf);
+/**
+ * @brief Configuration mode STANDBY on RF24
+ */
+void rf24_standby_mode(RF24_Handle *rf);
+
+/**
+ * @brief Start mode listening on RF24
+ */
+void rf24_listen_start(RF24_Handle *rf);
+/**
+ * @brief Stop mode listening on RF24
+ */
+void rf24_listen_stop(RF24_Handle *rf);
+
+
+/**
+ * @brief function support for writing user data wih spi
+ */
+void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8_t writeType);
+/**
+ * @brief function support for reading user data wih spi
  */
 void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size);
 
-/*
- * Read user configuration RF24
- * data as pointer unit8_t, it can be array[] or single byte
- * read data with multiple byte.
+/**
+ * @brief Empty buffer TX
  */
-void rf24_read_multi_config(RF24_Handle *rf, uint8_t reg, uint8_t *buf, uint8_t size);
+void rf24_empty_tx_buffer(RF24_Handle *rf);
+/**
+ * @brief Empty buffer RX
+ */
+void rf24_empty_rx_buffer(RF24_Handle *rf);
 
-/*
- * Check size of data is coming
+/**
+ * @brief Init RF24 module
  */
-uint8_t rf24_rx_bufSize(RF24_Handle *rf);
+uint8_t rf24_init(RF24_Handle *rf);
 
-/*
- * Read flag for new package data come in
- * Data is not padded, it empty and receive new ones.
- */
-bool rf24_isDataReady(RF24_Handle *rf);
 
-/*
- * Initial for RF24 transmission with mode (TX/ RX)
+/**
+ * Debug function
  */
-void rf24_init(RF24_Handle *rf, uint8_t mode);
 
-/*
- * factory reset for rf24
- */
-void rf24_factory_reset(RF24_Handle *rf);
-/*
- * DEBUG FUNCTION
- */
+void print_state_init(RF24_Handle *rf);
 void print_reg(const char *name, uint8_t value);
 void print_addr(const char *name, uint8_t *addr, uint8_t len);
 

@@ -59,14 +59,9 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-RF24_Handle rf_handle;
-const uint8_t address[5] = {'v','n','a','m','n'};
-
-int _write(int file, char *ptr, int len)
-{
-    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
-}
+RF24_Handle rf;
+/* Buffer nhận tối đa 32 byte */
+uint8_t rx_buf[32];
 
 /* USER CODE END 0 */
 
@@ -78,19 +73,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	rf_handle.pipe          = RX_PIPE_ADDR_0;
-	rf_handle.channel       = 9;
-	rf_handle.baudrate      = 0x06;
-	rf_handle.addr_len      = 5;
-
-	memcpy(rf_handle.tx_addr, address, rf_handle.addr_len);
-	memcpy(rf_handle.rx_addr, address, rf_handle.addr_len);   // BẮT BUỘC
-
-	rf_handle.cfg.cePin  	= CE_Pin;
-	rf_handle.cfg.cePort 	= CE_GPIO_Port;
-	rf_handle.cfg.csnPin 	= CS_Pin;
-	rf_handle.cfg.csnPort	= CS_GPIO_Port;
-	rf_handle.cfg.hspi      = &hspi2;
 
   /* USER CODE END 1 */
 
@@ -115,9 +97,8 @@ int main(void)
   MX_SPI2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  rf24_init(&rf_handle, RX_MODE);
 
-  printf("Receiver READY\n\n");
+  printf("Receiver ready...\r\n");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -127,36 +108,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // Debug RF24 STATUS
-	  uint8_t status = rf24_read_config(&rf_handle, STATUS_REG);
-	  uint8_t fifo   = rf24_read_config(&rf_handle, FIFO_STATUS);
-
-	  printf("STATUS=0x%02X | FIFO=0x%02X\r\n", status, fifo);
-
-	  if (rf24_isDataReady(&rf_handle))
-	  {
-		  uint8_t size = rf24_rx_bufSize(&rf_handle);
-
-		  if (size > 32)
-		  {
-			  printf("Invalid RX size = %d\n", size);
-			  rf24_command(&rf_handle, FLUSH_RX);
-			  continue;
-		  }
-
-		  uint8_t buffer[32] = {0};
-		  rf24_read_data(&rf_handle, buffer, size);
-
-		  // Clear RX_DR interrupt
-		  rf24_write_config(&rf_handle, STATUS_REG, (1 << 6));
-
-		  printf("Received (%d bytes): ", size);
-		  for (uint8_t i = 0; i < size; i++)
-			  printf("%c", buffer[i]);
-		  printf("\r\n");
-	  }
-
-	  HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }

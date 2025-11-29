@@ -22,6 +22,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "rf24_lib.h"
+
+#define isEmptyBuffer(buf)      ((buf) != NULL ? 0 : 1)
+#define minValue(val1, val2)	((val1) < (val2) ? (val1) : (val2))
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,8 +63,9 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 RF24_Handle rf_handle;
-const uint8_t address[6] = {'v','n','a','1', '\0'};
+const uint8_t address[] = "hal";
 
+//debug with UART port
 int _write(int file, char *ptr, int len)
 {
     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
@@ -103,44 +107,36 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  printf("\n=== Start up function ===\r\n");
-  //=============================
-  // CONFIG YOUR RF24 HANDLE HERE
-  //=============================
-  rf_handle.pipe          = RX_PIPE_ADDR_0;
-  rf_handle.channel       = 9;
-  rf_handle.baudrate      = 0x06;
-  rf_handle.addr_len      = 5;
-  memcpy(rf_handle.tx_addr, address, rf_handle.addr_len);
-  memcpy(rf_handle.rx_addr, address, rf_handle.addr_len);   // <<=== BẮT BUỘC
-  rf_handle.cfg.cePin  	= CE_Pin;
-  rf_handle.cfg.cePort 	= CE_GPIO_Port;
-  rf_handle.cfg.csnPin 	= CS_Pin;
-  rf_handle.cfg.csnPort	= CS_GPIO_Port;
-  rf_handle.cfg.hspi      = &hspi2;
+  //========RF_CONFIGURATION==========
+  rf_handle.cfg.cePin = CE_Pin;
+  rf_handle.cfg.cePort = CE_GPIO_Port;
+  rf_handle.cfg.csnPin = CS_Pin;
+  rf_handle.cfg.csnPort = CS_GPIO_Port;
+  rf_handle.cfg.hspi = &hspi2;
 
-  //=============================
-  // FACTORY RESET DATA REGISTER  rf24_factory_reset(&rf_handle);
-  //=============================
-  //===============================
-  // READ CHECK FACTORY RANDOM DATA
-  //===============================
-  //  uint8_t width_addr = rf24_read_config(&rf_handle, SET_ADDR_WID);
-  //  print_reg("SET_ADDR_WID", width_addr);
+  //  uint8_t lenOfAddr = sizeof(address)/ sizeof(address[0]); char
+  uint8_t lenOfAddr = sizeof(address);
+  lenOfAddr = minValue(lenOfAddr, MAX_ADDRESS);
+  memcpy(rf_handle.address, address, lenOfAddr);
+  rf_handle.addr_len = lenOfAddr;
 
-  //===============================
-  // Initial RF24
-  //===============================
-  rf24_init(&rf_handle, TX_MODE);
+  rf_handle.dynamic_pay_load = false; 					// normal rf24 don't have
+  rf_handle.baudrate = BAUD_1MBPS;
+  rf_handle.channel = 12; 								//126 channel support
+  rf_handle.is_enable_payload_ack = true;
+  rf_handle.pipe = PIPE0;
+  memcpy(rf_handle.pipe0_rx_addr, rf_handle.address, lenOfAddr);
+  memcpy(rf_handle.pipe0_tx_addr, rf_handle.address, lenOfAddr);
 
-  uint8_t width_addr = rf24_read_config(&rf_handle, SET_ADDR_WID);
-  print_reg("SET_ADDR_WID", width_addr);
-  uint8_t tx_after[5] = {0};
-  rf24_read_multi_config(&rf_handle, TX_ADDR, tx_after, rf_handle.addr_len);
-  print_addr("TX_ADDR", tx_after, rf_handle.addr_len);
+  //========END CONFIGURATION==========
+//  rf24_ce_pin(&rf_handle, true);
 
-  rf_handle.cfg.ce_status = true;
-  HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_SET);
+  print_state_init(&rf_handle);
+
+  rf24_init(&rf_handle);
+
+  print_state_init(&rf_handle);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -150,12 +146,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	printf("=====New session====\r\n");
-	char msg[] = "msg";
-	rf24_write_data(&rf_handle, (uint8_t*)msg, 3);
-	printf("TX sent: %s\r\n", msg);
-
-	HAL_Delay(300);
   }
   /* USER CODE END 3 */
 }
