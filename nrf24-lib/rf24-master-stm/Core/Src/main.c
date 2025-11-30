@@ -63,7 +63,8 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 RF24_Handle rf_handle;
-const uint8_t address[] = "hal";
+const uint8_t tx_address[] = "00002"; //address send
+const uint8_t rx_address[] = "00001"; //address listen
 
 //debug with UART port
 int _write(int file, char *ptr, int len)
@@ -113,11 +114,9 @@ int main(void)
   rf_handle.cfg.csnPin = CS_Pin;
   rf_handle.cfg.csnPort = CS_GPIO_Port;
   rf_handle.cfg.hspi = &hspi2;
-
-  //  uint8_t lenOfAddr = sizeof(address)/ sizeof(address[0]); char
-  uint8_t lenOfAddr = sizeof(address);
+  uint8_t lenOfAddr = sizeof(tx_address);
   lenOfAddr = minValue(lenOfAddr, MAX_ADDRESS);
-  memcpy(rf_handle.address, address, lenOfAddr);
+  memcpy(rf_handle.address, tx_address, lenOfAddr);
   rf_handle.addr_len = lenOfAddr;
 
   rf_handle.dynamic_pay_load = false; 					// normal rf24 don't have
@@ -125,17 +124,13 @@ int main(void)
   rf_handle.channel = 12; 								//126 channel support
   rf_handle.is_enable_payload_ack = true;
   rf_handle.pipe = PIPE0;
-  memcpy(rf_handle.pipe0_rx_addr, rf_handle.address, lenOfAddr);
-  memcpy(rf_handle.pipe0_tx_addr, rf_handle.address, lenOfAddr);
 
   //========END CONFIGURATION==========
-//  rf24_ce_pin(&rf_handle, true);
-
   print_state_init(&rf_handle);
-
   rf24_init(&rf_handle);
-
   print_state_init(&rf_handle);
+
+
 
   /* USER CODE END 2 */
 

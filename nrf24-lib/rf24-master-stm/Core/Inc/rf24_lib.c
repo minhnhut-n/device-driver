@@ -8,8 +8,11 @@
 #include "rf24_lib.h"
 
 /**
- * Macro for define
+ * Macro & variable for define
  */
+
+static const uint8_t pipeAddr[6] = {RX_PIPE_ADDR_0, RX_PIPE_ADDR_1, RX_PIPE_ADDR_2,
+                                    RX_PIPE_ADDR_3, RX_PIPE_ADDR_4, RX_PIPE_ADDR_5};
 
 /**
  * Macro function
@@ -28,32 +31,29 @@ static void rf24_autoAck_enable(RF24_Handle *rf, uint8_t pipe)
 	config |= (1 << pipe);
 	rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
 }
-static void rf24_address_set(RF24_Handle *rf)
-{
-	uint8_t pipeChose = PIPE0;
-	switch (rf->pipe)
-	{
-	case PIPE0:
-		pipeChose = RX_PIPE_ADDR_0;
-		break;
-	case PIPE1:
-		pipeChose = RX_PIPE_ADDR_1;
-		break;
-	case PIPE2:
-		pipeChose = RX_PIPE_ADDR_2;
-		break;
-	case PIPE3:
-		pipeChose = RX_PIPE_ADDR_3;
-		break;
-	case PIPE4:
-		pipeChose = RX_PIPE_ADDR_4;
-		break;
-	case PIPE5:
-		pipeChose = RX_PIPE_ADDR_5;
-		break;
-	}
-	rf24_write_reg(rf, pipeChose, rf->address, rf->addr_len);
-}
+
+//redundant function
+//static void rf24_address_set(RF24_Handle *rf)
+//{
+//	uint8_t pipeChose = pipeAddr[rf->pipe];
+//    if (rf->pipe <= 5) {
+//        //from pipe2 to pipe 5
+//        if (rf->pipe >= 2) {
+//            uint8_t currAddr[MAX_ADDRESS] = {0};
+//            rf24_read_reg(rf, RX_PIPE_ADDR_1, currAddr, MAX_ADDRESS);
+//            currAddr[MAX_ADDRESS-1] = rf->address;
+//            rf24_write_reg(rf, pipeChose, currAddr, MAX_ADDRESS);
+//        }
+//        else if (pipeNum == PIPE1 || !(rf->is_tx_mode)) {
+//            rf24_write_reg(rf, pipeChose, addressRX, MAX_ADDRESS);
+//        }
+//    }
+//
+//
+//    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+//    value |= (ENABLE << pipeNum);
+//    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+//}
 
 
 /**
@@ -251,6 +251,8 @@ void rf24_rx_mode(RF24_Handle *rf)
  */
 void rf24_tx_mode(RF24_Handle *rf)
 {
+    rf->is_tx_mode = true;
+
 	rf->cfg.rf24_config_reg = (rf->cfg.rf24_config_reg & ~(1 << PRIM_RX)) | (TX_MODE << PRIM_RX);
     rf24_write_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg, ONE_BYTE);
 
@@ -271,40 +273,69 @@ void rf24_standby_mode(RF24_Handle *rf)
         rf->cfg.rf24_config_reg |= (1 << PWR_UP);
         rf24_write_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg, ONE_BYTE);
     }
+
+    rf->is_tx_mode = false;
     HAL_Delay(1);
 }
 
 /**
- * Pipe data set
+ * Open pipe data for reading
  */
-void rf24_pipeData_open(RF24_Handle *rf, uint8_t pipeNum)
+void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
 {
-    uint8_t dataReg = 0x00;
-    rf24_read_reg(rf, EN_RX_ADDR, &dataReg, ONE_BYTE);
-    // dataReg = ~(~dataReg | (1<<pipeNum));
-    dataReg |= (1 << pipeNum);
+	if (pipeNum == PIPE0) {
+		memcpy(rf->pipe0_rx_addr, rf->address, rf->addr_len);
+		rf->is_restore_pipe0_addr = true;
+	}
 
-    rf24_write_reg(rf, EN_RX_ADDR, &dataReg, ONE_BYTE);
+	//Due to PIPE 2->5, share 4 bytes address with PIPE1 (same)
+    //It must be edit 1 LSB for address.
+    //PIPE0 share address with TX_PIPE,
+    //It must be not overwrite on TX_PIPE_ADDR when it is in TX mode
+    uint8_t targetPipeAddr = pipeAddr[rf->pipe];
+    uint8_t value = 0;
+
+    if (pipeNum <= 5) {
+        //from pipe2 to pipe 5
+        if (pipeNum >= 2) {
+            uint8_t currAddr[MAX_ADDRESS] = {0};
+            rf24_read_reg(rf, RX_PIPE_ADDR_1, currAddr, MAX_ADDRESS);
+            currAddr[MAX_ADDRESS-1] = *addressRX;
+            rf24_write_reg(rf, targetPipeAddr, currAddr, MAX_ADDRESS);
+        }
+        else if (pipeNum == PIPE1 || !(rf->is_tx_mode)) {
+            rf24_write_reg(rf, targetPipeAddr, addressRX, MAX_ADDRESS);
+        }
+    }
+
+    
+    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    value |= (ENABLE << pipeNum);
+    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+}
+/**
+ * Close pipe data for reading
+ */
+void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
+{
+    uint8_t value = 0;
+    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    value &= ~(ENABLE << pipeNum);
+    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
 
     if (pipeNum == 0) {
-        rf->is_restore_pipe0_addr = true;
+        // keep track of pipe 0's RX state to avoid null vs 0 in addr cache
+        rf->is_restore_pipe0_addr = false;
+ 
     }
 }
 /**
- * Pipe data close
+ * Open pipe data for writing
  */
-void rf24_pipeData_close(RF24_Handle *rf, uint8_t pipeNum)
+void rf24_pipeData_tx_open(RF24_Handle *rf, const uint8_t* address)
 {
-    uint8_t dataReg = 0x00;
-    rf24_read_reg(rf, EN_RX_ADDR, &dataReg, ONE_BYTE);
-    // dataReg = ~(~dataReg | (1<<pipeNum));
-    dataReg &= ~(1 << pipeNum);
-
-    rf24_write_reg(rf, EN_RX_ADDR, &dataReg, ONE_BYTE);
-
-    if (pipeNum != 0) {
-        rf->is_restore_pipe0_addr = false;
-    }
+    rf24_write_reg(rf, RX_PIPE_ADDR_0, rf->pipe0_rx_addr, rf->addr_len);
+    rf24_write_reg(rf, TX_ADDR, rf->pipe0_tx_addr, rf->addr_len);
 }
 
 /**
@@ -320,7 +351,7 @@ void rf24_listen_start(RF24_Handle *rf)
     }
     else {
         //this is close for ack data event, not receive user data at this time
-        rf24_pipeData_close(rf, PIPE0);
+    	rf24_pipeData_rx_close(rf, PIPE0);
     }
 }
 /**
@@ -375,7 +406,7 @@ uint8_t rf24_init(RF24_Handle *rf)
 	rf24_autoAck_enable(rf, rf->pipe);
 
 	printf("==>> Pipe open <<==\r\n");
-	rf24_pipeData_open(rf, rf->pipe);
+	rf24_pipeData_rx_open(rf, rf->pipe, rf->address);
 
 	printf("==>> Address config <<==\r\n");
 	uint8_t aw_reg = rf->addr_len - 2;
@@ -387,8 +418,8 @@ uint8_t rf24_init(RF24_Handle *rf)
 	printf("==>> Baudrate config <<==\r\n");
 	rf24_write_reg(rf, RF_SETUP, &rf->baudrate, ONE_BYTE);
 
-	printf("==>> Pipe Address	<<==\r\n");
-	rf24_address_set(rf);
+//	printf("==>> Pipe Address	<<==\r\n");
+//	rf24_address_set(rf);
 
 	printf("====  END INIT RF24   ====\r\n");
 
@@ -426,29 +457,8 @@ void print_state_init(RF24_Handle *rf)
 	printf("Value: %02X\r\n", check);
 
 	printf("==>> Pipe Address	<<==\r\n");
-	uint8_t buff[rf->addr_len +1];
-	uint8_t pipeChose = PIPE0;
-	switch (rf->pipe)
-	{
-	case PIPE0:
-		pipeChose = RX_PIPE_ADDR_0;
-		break;
-	case PIPE1:
-		pipeChose = RX_PIPE_ADDR_1;
-		break;
-	case PIPE2:
-		pipeChose = RX_PIPE_ADDR_2;
-		break;
-	case PIPE3:
-		pipeChose = RX_PIPE_ADDR_3;
-		break;
-	case PIPE4:
-		pipeChose = RX_PIPE_ADDR_4;
-		break;
-	case PIPE5:
-		pipeChose = RX_PIPE_ADDR_5;
-		break;
-	}
+	uint8_t buff[MAX_ADDRESS];
+	uint8_t pipeChose = pipeAddr[rf->pipe];
 	rf24_read_reg(rf, pipeChose, buff, rf->addr_len);
 	for (int i = 0; i <  rf->addr_len; i++)
 		printf("Value: %02X\r\n", buff[i]);

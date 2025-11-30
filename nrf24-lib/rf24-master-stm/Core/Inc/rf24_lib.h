@@ -50,6 +50,7 @@ typedef struct {
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
     bool is_enable_payload_ack;
+    bool is_tx_mode;
 
 } RF24_Handle;
 
@@ -187,6 +188,18 @@ bool isValid_AddrWidth(RF24_Handle *rf);
  * @brief change pin CE logic and status
  */
 void rf24_ce_pin(RF24_Handle *rf, bool status);
+/**
+ * Open pipe data for reading
+ */
+void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX);
+/**
+ * Close pipe data for reading
+ */
+void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum);
+/**
+ * Open pipe data for writing
+ */
+void rf24_pipeData_tx_open(RF24_Handle *rf, const uint8_t* address);
 
 /**
  * @brief Configuration mode RX on RF24
