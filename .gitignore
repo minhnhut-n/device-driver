@@ -1,6 +1,8 @@
 # Ignore build folders
 **/Debug/
 **/Release/
+**/build/
+**/.settings
 
 # Ignore Eclipse/IDE files
 *.launch
