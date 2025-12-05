@@ -14,6 +14,10 @@
  * Command word: MSB -> LSB
  * Data: LSB --> MSB
  */
+
+#define BIT_ENABLE			1
+#define BIT_DISABLE			0
+
 #define R_REG			0x00
 #define W_REG			0x20
 

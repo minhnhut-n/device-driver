@@ -58,42 +58,13 @@ typedef struct {
  */
 typedef enum
 {
-    /**
-     * (0) represents:
-     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
-     * :-------:|:-----------------------------:|:----------------------------:
-     *  -18 dBm | -6 dBm | -12 dBm
-     */
     RF24_PA_MIN = 0,
-    /**
-     * (1) represents:
-     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
-     * :-------:|:-----------------------------:|:----------------------------:
-     *  -12 dBm | 0 dBm | -4 dBm
-     */
     RF24_PA_LOW,
-    /**
-     * (2) represents:
-     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
-     * :-------:|:-----------------------------:|:----------------------------:
-     *  -6 dBm | 3 dBm | 1 dBm
-     */
     RF24_PA_HIGH,
-    /**
-     * (3) represents:
-     * nRF24L01 | Si24R1 with<br>lnaEnabled = 1 | Si24R1 with<br>lnaEnabled = 0
-     * :-------:|:-----------------------------:|:----------------------------:
-     *  0 dBm | 7 dBm | 4 dBm
-     */
     RF24_PA_MAX,
-    /**
-     * (4) This should not be used and remains for backward compatibility.
-     */
     RF24_PA_ERROR
 } rf24_pa_dbm_e;
 
-/**
- */
 typedef enum
 {
     /** (0) represents 1 Mbps */
@@ -104,8 +75,6 @@ typedef enum
     RF24_250KBPS
 } rf24_datarate_e;
 
-/**
- */
 typedef enum
 {
     /** (0) represents no CRC checksum is used */
@@ -116,8 +85,6 @@ typedef enum
     RF24_CRC_16
 } rf24_crclength_e;
 
-/**
- */
 typedef enum
 {
     /// @brief The FIFO is not full nor empty, but it is occupied with 1 or 2 payloads.
@@ -129,8 +96,7 @@ typedef enum
     /// @brief Represents corruption of data over SPI (when observed).
     RF24_FIFO_INVALID,
 } rf24_fifo_state_e;
-/**
- */
+
 typedef enum
 {
     /// An alias of `0` to describe no IRQ events enabled.
@@ -158,11 +124,6 @@ void spi_beginTransaction(RF24_Handle *rf);
 void spi_endTransaction(RF24_Handle *rf);
 
 /**
- * @brief function for configuration rf24 struct
- */
-void rf24_hw_config(RF24_Handle *rf, uint8_t ce_pin, GPIO_TypeDef *ce_port, uint8_t csn_pin,  GPIO_TypeDef *csn_port,\
-                    uint8_t rf_channel, uint8_t baudrate, uint8_t* addr, uint8_t _pipe, bool payLoadCondfig);
-/**
  * @brief function support for writing configuration wih spi
  */
 void rf24_write_reg(RF24_Handle *rf, uint8_t reg, const uint8_t *regData, uint8_t size);
@@ -172,10 +133,14 @@ void rf24_write_reg(RF24_Handle *rf, uint8_t reg, const uint8_t *regData, uint8_
 void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 
 /**
- * =========================
- * This function is for RF24
- * =========================
+ * @brief function support for writing user data wih spi
  */
+void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8_t writeType);
+
+/**
+ * @brief function support for reading user data wih spi
+ */
+void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size);
 
 /**
  * @brief Using SETUP_AW to check it is value or not.
@@ -197,9 +162,9 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
  */
 void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum);
 /**
- * Open pipe data for writing
+ * Registry for TX tunnel prepare for writing
  */
-void rf24_pipeData_tx_open(RF24_Handle *rf, const uint8_t* address);
+void rf24_pipeData_tx_registry(RF24_Handle *rf, const uint8_t* address);
 
 /**
  * @brief Configuration mode RX on RF24
@@ -216,22 +181,16 @@ void rf24_standby_mode(RF24_Handle *rf);
 
 /**
  * @brief Start mode listening on RF24
+ * @def when listening start, mode turn from TX -> RX mode
+ * then device could you rf24_read to read value from rf24
  */
 void rf24_listen_start(RF24_Handle *rf);
 /**
  * @brief Stop mode listening on RF24
+ * @def this function mean, when listening is done, close 
+ * section and return to default (tx mode)
  */
 void rf24_listen_stop(RF24_Handle *rf);
-
-
-/**
- * @brief function support for writing user data wih spi
- */
-void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8_t writeType);
-/**
- * @brief function support for reading user data wih spi
- */
-void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size);
 
 /**
  * @brief Empty buffer TX
@@ -249,7 +208,7 @@ uint8_t rf24_init(RF24_Handle *rf);
 
 
 /**
- * Debug function
+ * FOR DEBUG WITH SERIAL LOG ONLY
  */
 
 void print_state_init(RF24_Handle *rf);

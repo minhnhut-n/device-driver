@@ -63,8 +63,8 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 RF24_Handle rf_handle;
-const uint8_t tx_address[] = "00002"; //address send
-const uint8_t rx_address[] = "00001"; //address listen
+const uint8_t tx_address[] = "nhutn"; //address send
+const uint8_t rx_address[] = "minhn"; //address listen
 
 //debug with UART port
 int _write(int file, char *ptr, int len)
@@ -129,8 +129,6 @@ int main(void)
   print_state_init(&rf_handle);
   rf24_init(&rf_handle);
   print_state_init(&rf_handle);
-
-
 
   /* USER CODE END 2 */
 
