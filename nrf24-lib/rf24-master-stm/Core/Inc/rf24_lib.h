@@ -212,6 +212,7 @@ uint8_t rf24_init(RF24_Handle *rf);
  */
 
 void print_state_init(RF24_Handle *rf);
+void print_tc_function(RF24_Handle *rf);
 void print_reg(const char *name, uint8_t value);
 void print_addr(const char *name, uint8_t *addr, uint8_t len);
 

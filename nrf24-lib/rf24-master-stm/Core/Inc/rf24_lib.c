@@ -258,8 +258,8 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
  */
 void rf24_pipeData_tx_registry(RF24_Handle *rf, const uint8_t* address)
 {
-    rf24_write_reg(rf, RX_PIPE_ADDR_0, rf->pipe0_rx_addr, rf->addr_len);
-    rf24_write_reg(rf, TX_ADDR, rf->pipe0_tx_addr, rf->addr_len);
+    rf24_write_reg(rf, RX_PIPE_ADDR_0, address, rf->addr_len);
+    rf24_write_reg(rf, TX_ADDR, address, rf->addr_len);
 }
 
 /**
@@ -334,7 +334,7 @@ void rf24_listen_start(RF24_Handle *rf)
 /**
  * @brief Stop mode listening on RF24
  * @def this function mean, when listening is done, close 
- * section and return to default (tx mode)
+ * section and return to default (standby mode)
  */
 void rf24_listen_stop(RF24_Handle *rf)
 {
@@ -408,6 +408,77 @@ uint8_t rf24_init(RF24_Handle *rf)
  * FOR DEBUG WITH SERIAL LOG ONLY
  * =============================================================================
  */
+
+void print_tc_function(RF24_Handle *rf) {
+    //check pipe open/close
+    printf("\r\ncheck pipe open/close =======\r\n");
+    uint8_t en_bit_1 = 0;
+    uint8_t en_bit_2 = 0;
+    const uint8_t *str = (const uint8_t *)"nhutn";
+    uint8_t buffer1[MAX_ADDRESS] = "nhutn";
+    uint8_t buffer2[MAX_ADDRESS] = {0};
+    uint8_t targetPipeAddr = pipeAddr[PIPE0];
+    
+    rf24_read_reg(rf, EN_RX_ADDR, &en_bit_1, ONE_BYTE);
+    rf24_pipeData_rx_open(rf, PIPE0, buffer1);
+    rf24_read_reg(rf, EN_RX_ADDR, &en_bit_2, ONE_BYTE);
+    rf24_read_reg(rf, targetPipeAddr, buffer2, MAX_ADDRESS);
+
+    if (en_bit_1 != en_bit_2) printf("TRUE!(%d)\r\n", __LINE__);
+    else printf("FALSE!(%d)\r\n", __LINE__);
+
+    if (!memcmp(buffer1, buffer2, MAX_ADDRESS)) printf("TRUE!(%d)\r\n", __LINE__);
+    else printf("FALSE!(%d)\r\n", __LINE__);
+
+    rf24_pipeData_rx_close(rf, PIPE0);
+    rf24_read_reg(rf, EN_RX_ADDR, &en_bit_1, ONE_BYTE);
+    if (en_bit_1 != en_bit_2) printf("TRUE!(%d)\r\n", __LINE__);
+    else printf("FALSE!(%d)\r\n", __LINE__);
+
+    //check TX buffer
+    printf("check tx buffer =======\r\n");
+    rf24_pipeData_tx_registry(rf, str);
+    rf24_read_reg(rf, pipeAddr[PIPE0], buffer2, MAX_ADDRESS);
+    rf24_read_reg(rf, TX_ADDR, buffer1, MAX_ADDRESS);
+    if (!memcmp(buffer1, buffer2, MAX_ADDRESS) && !memcmp(buffer1, (const uint8_t*)str, MAX_ADDRESS))
+        printf("TRUE!(%d)\r\n", __LINE__);
+    else 
+        printf("FALSE!(%d)\r\n", __LINE__);
+
+    //check rx/tx mode switch
+    printf("check tx/rx switch mode =======\r\n");
+    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
+    printf("config reg data: %02x\r\n", en_bit_1);
+    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
+    printf("status reg data: %02x\r\n", en_bit_2);
+    if (en_bit_1 & (RX_MODE << PRIM_RX))
+        rf24_tx_mode(rf);
+    else
+        rf24_rx_mode(rf);
+    
+    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
+    printf("after config reg data: %02x\r\n", en_bit_1);
+    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
+    printf("after status reg data: %02x\r\n", en_bit_2);
+
+    //check standby mode
+    printf("check standby mode =======\r\n");
+    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
+    printf("standby mode: %02x\r\n", en_bit_1);
+
+    //check listening start/stop
+    printf("check listen start/stop mode =======\r\n");
+    rf24_listen_start(rf);
+    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
+    printf("config reg data: %02x\r\n", en_bit_1);
+    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
+    printf("status reg data: %02x\r\n", en_bit_2);
+    rf24_listen_stop(rf);
+    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
+    printf("after config reg data: %02x\r\n", en_bit_1);
+    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
+    printf("after status reg data: %02x\r\n", en_bit_2);
+}
 
 void print_state_init(RF24_Handle *rf)
 {

@@ -2,21 +2,15 @@
 **/Debug/
 **/Release/
 **/build/
-**/.settings
 
-# Ignore Eclipse/IDE files
+# Ignore IDE files
+**/.settings/
 *.launch
 *.cproject
 *.project
-*.settings/
 *.externalToolBuilders/
 *.mxproject
-.metadata/
-*build/
-*.settings
-
-# # Ignore CubeMX generated files (optional)
-# *.ioc
+**/.metadata/
 
 # Keep source headers and c files
 !**/Src/*.c
@@ -27,3 +21,7 @@
 # Keep external library files
 !nrf24-lib/rf24-library/*.c
 !nrf24-lib/rf24-library/*.h
+!nrf24-lib/rf24-master-stm/*.c
+!nrf24-lib/rf24-master-stm/*.h
+!nrf24-lib/rf24-slave-stm/*.c
+!nrf24-lib/rf24-slave-stm/*.h

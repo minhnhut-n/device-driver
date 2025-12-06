@@ -126,9 +126,13 @@ int main(void)
   rf_handle.pipe = PIPE0;
 
   //========END CONFIGURATION==========
-  print_state_init(&rf_handle);
-  rf24_init(&rf_handle);
-  print_state_init(&rf_handle);
+   print_state_init(&rf_handle);
+   rf24_init(&rf_handle);
+   print_state_init(&rf_handle);
+
+//  Test case
+//  HAL_Delay(20);
+//  print_tc_function(&rf_handle);
 
   /* USER CODE END 2 */
 
