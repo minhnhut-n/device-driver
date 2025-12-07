@@ -34,14 +34,12 @@ typedef struct {
 
 typedef struct {
 	RF24_Config cfg;
-	uint8_t pipe;
 	uint8_t channel;
 	uint8_t baudrate;
+	uint8_t power;
     bool dynamic_pay_load;
     uint8_t payload_size;
-	
-	uint8_t addr_len;
-    uint8_t address[MAX_ADDRESS];
+    uint8_t pipe_auto_ack;
     /**
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
      * that need to restore to it own pipe 0 data.
@@ -114,12 +112,12 @@ typedef enum
 
 /**
  * @brief helper function for stm32-spi purpose
- * in this function, csn (chip select pin will go low to enable transmittion)
+ * in this function, csn (chip select pin will go low to enable transmission)
  */
 void spi_beginTransaction(RF24_Handle *rf);
 /**
  * @brief helper function for stm32stm32-spi purpose
- * in this function, csn (chip select pin will go high to disable transmittion)
+ * in this function, csn (chip select pin will go high to disable transmission)
  */
 void spi_endTransaction(RF24_Handle *rf);
 
@@ -150,13 +148,18 @@ void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size);
 bool isValid_AddrWidth(RF24_Handle *rf);
 
 /**
+ * @brief Power consumption for rf24
+ */
+void rf24_power_set(RF24_Handle *rf);
+
+/**
  * @brief change pin CE logic and status
  */
 void rf24_ce_pin(RF24_Handle *rf, bool status);
 /**
  * Open pipe data for reading
  */
-void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX);
+void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addressRX);
 /**
  * Close pipe data for reading
  */
@@ -211,8 +214,8 @@ uint8_t rf24_init(RF24_Handle *rf);
  * FOR DEBUG WITH SERIAL LOG ONLY
  */
 
-void print_state_init(RF24_Handle *rf);
-void print_tc_function(RF24_Handle *rf);
+void print_state_init(RF24_Handle *rf, uint8_t pipeNum);
+void print_tc_function(RF24_Handle *rf, uint8_t pipeNum);
 void print_reg(const char *name, uint8_t value);
 void print_addr(const char *name, uint8_t *addr, uint8_t len);
 

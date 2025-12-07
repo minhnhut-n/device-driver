@@ -128,6 +128,11 @@
 #define BAUD_2MBPS 1
 #define BAUD_250KB 2
 
+#define MIN_POWER 	 0
+#define MID_LO_POWER 1
+#define	MID_HI_POWER 2
+#define MAX_POWER 	 3
+
 
 typedef enum {
 	RX_PIPE_ADDR_0 =	0x0A,

@@ -63,8 +63,8 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 RF24_Handle rf_handle;
-const uint8_t tx_address[] = "nhutn"; //address send
-const uint8_t rx_address[] = "minhn"; //address listen
+const uint8_t tx_address[] = "00002"; //address send
+const uint8_t rx_address[] = "00001"; //address listen
 
 //debug with UART port
 int _write(int file, char *ptr, int len)
@@ -114,26 +114,25 @@ int main(void)
   rf_handle.cfg.csnPin = CS_Pin;
   rf_handle.cfg.csnPort = CS_GPIO_Port;
   rf_handle.cfg.hspi = &hspi2;
-  uint8_t lenOfAddr = sizeof(tx_address);
-  lenOfAddr = minValue(lenOfAddr, MAX_ADDRESS);
-  memcpy(rf_handle.address, tx_address, lenOfAddr);
-  rf_handle.addr_len = lenOfAddr;
 
+  rf_handle.pipe_auto_ack = PIPE0;
   rf_handle.dynamic_pay_load = false; 					// normal rf24 don't have
   rf_handle.baudrate = BAUD_1MBPS;
+  rf_handle.power = MIN_POWER;
   rf_handle.channel = 12; 								//126 channel support
   rf_handle.is_enable_payload_ack = true;
-  rf_handle.pipe = PIPE0;
+  rf_handle.payload_size = 1;  // Match the data being sent
 
   //========END CONFIGURATION==========
-   print_state_init(&rf_handle);
    rf24_init(&rf_handle);
-   print_state_init(&rf_handle);
+   rf24_pipeData_rx_open(&rf_handle, PIPE1, rx_address);
+   rf24_pipeData_tx_registry(&rf_handle, tx_address);
 
 //  Test case
 //  HAL_Delay(20);
 //  print_tc_function(&rf_handle);
 
+   uint8_t send_val = 2;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -143,6 +142,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  rf24_listen_stop(&rf_handle);
+	  printf("send data:...\r\n");
+	  rf24_write_data(&rf_handle, &send_val, ONE_BYTE, ONE_BYTE);
+
+	  HAL_Delay(100);
+//	  rf24_listen_start(&rf_handle);
+//
+
   }
   /* USER CODE END 3 */
 }
