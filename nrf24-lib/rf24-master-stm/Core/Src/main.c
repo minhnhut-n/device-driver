@@ -63,8 +63,8 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 RF24_Handle rf_handle;
-const uint8_t tx_address[] = "00002"; //address send
-const uint8_t rx_address[] = "00001"; //address listen
+const uint8_t tx_address[] = "00001"; //address send
+const uint8_t rx_address[] = "00002"; //address listen
 
 //debug with UART port
 int _write(int file, char *ptr, int len)
@@ -124,9 +124,9 @@ int main(void)
   rf_handle.payload_size = 1;  // Match the data being sent
 
   //========END CONFIGURATION==========
-   rf24_init(&rf_handle);
-   rf24_pipeData_rx_open(&rf_handle, PIPE1, rx_address);
-   rf24_pipeData_tx_registry(&rf_handle, tx_address);
+  rf24_init(&rf_handle);
+  rf24_pipeData_rx_open(&rf_handle, PIPE0, rx_address);
+  rf24_pipeData_tx_registry(&rf_handle, tx_address);
 
 //  Test case
 //  HAL_Delay(20);

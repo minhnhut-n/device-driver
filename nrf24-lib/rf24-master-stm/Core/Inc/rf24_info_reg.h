@@ -41,7 +41,7 @@
 #define EN_RX_ADDR		0x02 //for special pipe to communication
 #define SET_ADDR_WID	0x03
 #define SET_AUTO_RETRS	0x04
-#define SET_FREQ_CHA	0x05
+#define RF_CH			0x05
 #define RF_SETUP    	0x06
 #define STATUS_REG		0x07
 #define OBSERVE_TX		0x08
@@ -82,7 +82,8 @@
 #define ARC         0
 #define PLL_LOCK    4
 #define CONT_WAVE   7
-#define RF_DR       3
+#define RF_DR_HIGH  3
+#define RF_DR_LOW	5
 #define RF_PWR      6
 #define RX_DR       6
 #define TX_DS       5
@@ -135,12 +136,12 @@
 
 
 typedef enum {
-	RX_PIPE_ADDR_0 =	0x0A,
-	RX_PIPE_ADDR_1 =	0x0B,
-	RX_PIPE_ADDR_2 =	0x0C,
-	RX_PIPE_ADDR_3 =	0x0D,
-	RX_PIPE_ADDR_4 =	0x0E,
-	RX_PIPE_ADDR_5 =	0x0F
+    RX_PIPE_ADDR_0 =	0x0A,
+    RX_PIPE_ADDR_1 =	0x0B,
+    RX_PIPE_ADDR_2 =	0x0C,
+    RX_PIPE_ADDR_3 =	0x0D,
+    RX_PIPE_ADDR_4 =	0x0E,
+    RX_PIPE_ADDR_5 =	0x0F
 }pipe_enum_t;
 
 #endif /* INC_RF24_INFO_REG_H_ */

@@ -20,23 +20,23 @@
 
 //PinMode
 typedef struct {
-	SPI_HandleTypeDef *hspi;
+    SPI_HandleTypeDef *hspi;
 
-	GPIO_TypeDef *cePort;
-	uint16_t cePin;
-	bool ce_status;
+    GPIO_TypeDef *cePort;
+    uint16_t cePin;
+    bool ce_status;
 
-	GPIO_TypeDef *csnPort;
-	uint16_t csnPin;
+    GPIO_TypeDef *csnPort;
+    uint16_t csnPin;
 
-	uint8_t rf24_config_reg;
+    uint8_t rf24_config_reg;
 } RF24_Config;
 
 typedef struct {
-	RF24_Config cfg;
-	uint8_t channel;
-	uint8_t baudrate;
-	uint8_t power;
+    RF24_Config cfg;
+    uint8_t channel;
+    uint8_t baudrate;
+    uint8_t power;
     bool dynamic_pay_load;
     uint8_t payload_size;
     uint8_t pipe_auto_ack;
@@ -44,7 +44,7 @@ typedef struct {
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
      * that need to restore to it own pipe 0 data.
     */
-	uint8_t pipe0_tx_addr[MAX_ADDRESS];
+    uint8_t pipe0_tx_addr[MAX_ADDRESS];
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
     bool is_enable_payload_ack;
@@ -203,6 +203,20 @@ void rf24_empty_tx_buffer(RF24_Handle *rf);
  * @brief Empty buffer RX
  */
 void rf24_empty_rx_buffer(RF24_Handle *rf);
+
+
+/**
+ * @brief Power consumption for rf24
+ */
+void rf24_powerConsumption_set(RF24_Handle *rf);
+/**
+ * @brief Channel set for rf24
+ */
+void rf24_channel_set(RF24_Handle *rf, uint8_t channel);
+/**
+ * @brief Baudrate set for rf24
+ */
+void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate);
 
 /**
  * @brief Init RF24 module

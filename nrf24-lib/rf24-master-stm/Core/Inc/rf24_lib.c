@@ -30,8 +30,10 @@ static void rf24_autoAck_enable(RF24_Handle *rf, uint8_t pipe)
     uint8_t config = 0;
 
     rf24_read_reg(rf, EN_AA, &config, ONE_BYTE);
+    printf("Autoack EN_AA info: %02x\r\n", config);
     config |= (1 << pipe);
     rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
+    printf("Autoack EN_AA after info: %02x\r\n", config);
 }
 
 /**
@@ -137,7 +139,7 @@ void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8
     }
 
     rf24_ce_pin(rf, BIT_ENABLE);
-    HAL_Delay(10);  // Longer pulse for reliable transmission
+    HAL_Delay(1);
     rf24_ce_pin(rf, BIT_DISABLE);
     spi_endTransaction(rf);
 }
@@ -195,12 +197,83 @@ bool isValid_AddrWidth(RF24_Handle *rf)
 /**
  * @brief Power consumption for rf24
  */
-void rf24_power_set(RF24_Handle *rf)
+void rf24_powerConsumption_set(RF24_Handle *rf)
 {
-	uint8_t config = 0;
-	rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
-	config |= ~(rf->power<<1);
-	rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
+    uint8_t config = 0;
+    rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
+    printf("power consumtion RF_SETUP info: %02x\r\n", config);
+
+    config &= ~((1<<1) | (1<<2));
+    config |= ((rf->power&0x03) << 1);
+
+    rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
+    printf("power consumtion RF_SETUP after info: %02x\r\n", config);
+}
+
+/**
+ * @brief Channel set for rf24
+ */
+void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
+{
+    uint8_t reset = 0;
+    printf("Channel set RF_CH info: %02x\r\n", 0);
+    rf24_read_reg(rf, RF_CH, &reset, ONE_BYTE);
+
+    if(channel > 125 || channel < 0)
+    {
+        printf("Channel set invalid\r\n");
+        return;
+    }
+
+    printf("Channel set RF_CH info: %02x\r\n", channel);
+    rf24_write_reg(rf, RF_CH, &channel, ONE_BYTE);
+}
+
+/**
+ * @brief Baudrate set for rf24
+ */
+void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
+{
+    uint8_t config = 0;
+    rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
+    printf("Baudrate set RF_CH info: %02x\r\n", config);
+
+    if ( (baudrate & 0x01) != 0 ) {
+        config |= (1<<RF_DR_HIGH);
+    }
+    else {
+        config &= ~(1<<RF_DR_HIGH);
+    }
+
+    if ( (baudrate & 0x02) != 0 ) {
+        config |= (1<<RF_DR_LOW);
+    }
+    else {
+        config &= ~(1<<RF_DR_LOW);
+    }
+
+    printf("Baudrate set RF_SETUP info: %02x\r\n", config);
+    rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
+}
+
+/**
+ * @brief Power set for rf24
+ */
+void rf24_power_set(RF24_Handle *rf, uint8_t status)
+{
+    uint8_t config = 0;
+    rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
+    printf("Power set CONFIG info: %02x\r\n", config);
+
+    if (status) {
+        config |= (1 << 1);
+    }
+    else {
+        config &= ~(1 << 1);
+    }
+
+    printf("Power set CONFIG after info: %02x\r\n", config);
+    rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
 }
 
 /**
@@ -340,10 +413,12 @@ void rf24_standby_mode(RF24_Handle *rf)
 {
     rf24_ce_pin(rf, false);
     rf24_read_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg, ONE_BYTE);
+    printf("config reg info: %02x\r\n", rf->cfg.rf24_config_reg);
 
     if ( !(rf->cfg.rf24_config_reg & (1 << PWR_UP)) ) {
         rf->cfg.rf24_config_reg |= (1 << PWR_UP);
         rf24_write_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg, ONE_BYTE);
+        printf("config reg after info: %02x\r\n", rf->cfg.rf24_config_reg);
     }
 
     rf->is_tx_mode = false;
@@ -417,28 +492,22 @@ uint8_t rf24_init(RF24_Handle *rf)
 {
     printf("\n====  INIT RF24   ====\r\n");
 
-    printf("==>> Standby mode <<==\r\n");
     rf24_standby_mode(rf);
 
-    printf("==>> AutoACK mode <<==\r\n");
     rf24_autoAck_enable(rf, rf->pipe_auto_ack);
 
-//    printf("==>> Pipe open <<==\r\n");
-//    rf24_pipeData_rx_open(rf, rf->pipe, rf->address);
+    rf24_powerConsumption_set(rf);
 
-    printf("====>Power consumption set<=====\r\n");
-    rf24_power_set(rf);
-
-    printf("==>> Address config <<==\r\n");
     //    uint8_t aw_reg = rf->addr_len - 2;
-	uint8_t aw_reg = MAX_ADDRESS - 2;
+    uint8_t aw_reg = MAX_ADDRESS - 2;
     rf24_write_reg(rf, SET_ADDR_WID, &aw_reg, ONE_BYTE);
+    printf("Address setup info: %02x\r\n", aw_reg);
+    rf24_read_reg(rf, SET_ADDR_WID, &aw_reg, ONE_BYTE);
+    printf("Address setup after info: %02x\r\n", aw_reg);
 
-    printf("==>> Channel config <<==\r\n");
-    rf24_write_reg(rf, SET_FREQ_CHA, &rf->channel, ONE_BYTE);
+    rf24_channel_set(rf, rf->channel);
 
-    printf("==>> Baudrate config <<==\r\n");
-    rf24_write_reg(rf, RF_SETUP, &rf->baudrate, ONE_BYTE);
+    rf24_baudrate_set(rf, rf->baudrate);
 
     printf("====  END INIT RF24   ====\r\n");
 
@@ -541,7 +610,7 @@ void print_state_init(RF24_Handle *rf, uint8_t pipeNum)
 
     printf("==>> Channel config <<==\r\n");
     check = 0;
-    rf24_read_reg(rf, SET_FREQ_CHA, &check, ONE_BYTE);
+    rf24_read_reg(rf, RF_CH, &check, ONE_BYTE);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Baudrate config <<==\r\n");
