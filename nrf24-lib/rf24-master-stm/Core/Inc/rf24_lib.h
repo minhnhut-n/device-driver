@@ -36,7 +36,7 @@ typedef struct {
     RF24_Config cfg;
     uint8_t channel;
     uint8_t baudrate;
-    uint8_t power;
+    uint8_t power_amplifier;
     bool dynamic_pay_load;
     uint8_t payload_size;
     uint8_t pipe_auto_ack;
@@ -44,8 +44,9 @@ typedef struct {
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
      * that need to restore to it own pipe 0 data.
     */
-    uint8_t pipe0_tx_addr[MAX_ADDRESS];
+    uint8_t tx_addr[MAX_ADDRESS];
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
+    uint8_t pipe1_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
     bool is_enable_payload_ack;
     bool is_tx_mode;
@@ -133,7 +134,7 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 /**
  * @brief function support for writing user data wih spi
  */
-void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8_t writeType);
+uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size);
 
 /**
  * @brief function support for reading user data wih spi
@@ -168,11 +169,15 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum);
  * Registry for TX tunnel prepare for writing
  */
 void rf24_pipeData_tx_registry(RF24_Handle *rf, const uint8_t* address);
+/**
+ * @brief Check data available or not
+ */
+bool rf24_is_dataAvailable(RF24_Handle *rf, uint8_t pipeNum);
 
 /**
  * @brief Configuration mode RX on RF24
  */
-void rf24_rx_mode(RF24_Handle *rf);
+void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX);
 /**
  * @brief Configuration mode TX on RF24
  */
@@ -219,10 +224,23 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel);
 void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate);
 
 /**
- * @brief Init RF24 module
+ * @brief: init rf24 module
+ * @note:
+ * - disable ce pin
+ * - config reg to 0x00
+ * - no auto ack
+ * - disable rx addr
+ * - channel reset to 0
+ * - flush buffer (clear buffer)
+ * - data rate and power reset to default (2MBps, 0dBm)
  */
-uint8_t rf24_init(RF24_Handle *rf);
+void rf24_init(RF24_Handle *rf);
 
+/**
+ * @brief: reset rf24 module
+ * @note:
+ */
+void rf24_reset(RF24_Handle *rf, uint8_t reg);
 
 /**
  * FOR DEBUG WITH SERIAL LOG ONLY

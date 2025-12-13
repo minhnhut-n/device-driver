@@ -124,19 +124,19 @@ int main(void)
   //===============================
   // READ CHECK FACTORY RANDOM DATA
   //===============================
-  //  uint8_t width_addr = rf24_read_config(&rf_handle, SET_ADDR_WID);
-  //  print_reg("SET_ADDR_WID", width_addr);
+  //  uint8_t width_addr = rf24_read_config(&rf_handle, ADDR_WID);
+  //  print_reg("ADDR_WID", width_addr);
 
   //===============================
   // Initial RF24
   //===============================
   rf24_init(&rf_handle, TX_MODE);
 
-  uint8_t width_addr = rf24_read_config(&rf_handle, SET_ADDR_WID);
-  print_reg("SET_ADDR_WID", width_addr);
+  uint8_t width_addr = rf24_read_config(&rf_handle, ADDR_WID);
+  print_reg("ADDR_WID", width_addr);
   uint8_t tx_after[5] = {0};
-  rf24_read_multi(&rf_handle, TX_ADDR, tx_after, rf_handle.addr_len);
-  print_addr("TX_ADDR", tx_after, rf_handle.addr_len);
+  rf24_read_multi(&rf_handle, TX_ADDR, tx_after, MAX_ADDRESS);
+  print_addr("TX_ADDR", tx_after, MAX_ADDRESS);
 
   uint8_t count = 0;
   /* USER CODE END 2 */

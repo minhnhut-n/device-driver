@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "rf24_lib.h"
+#include <string.h>
 
 #define isEmptyBuffer(buf)      ((buf) != NULL ? 0 : 1)
 #define minValue(val1, val2)	((val1) < (val2) ? (val1) : (val2))
@@ -62,9 +63,6 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-RF24_Handle rf_handle;
-const uint8_t tx_address[5] = {0x00, 0x00, 0x00, 0x00, 0x02};
-const uint8_t rx_address[5] = {0x00, 0x00, 0x00, 0x00, 0x01};
 
 //debug with UART port
 int _write(int file, char *ptr, int len)
@@ -72,6 +70,11 @@ int _write(int file, char *ptr, int len)
     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     return len;
 }
+
+RF24_Handle rf_handle;
+const uint8_t tx_address[5] = {0x00, 0x00, 0x00, 0x00, 0x02};
+char tx_data[20] = "NhutNguyen";
+
 
 /* USER CODE END 0 */
 
@@ -115,23 +118,15 @@ int main(void)
   rf_handle.cfg.csnPort = CS_GPIO_Port;
   rf_handle.cfg.hspi = &hspi2;
 
-  rf_handle.pipe_auto_ack = PIPE1;
-  rf_handle.dynamic_pay_load = true; 		// normal rf24 don't have
-  rf_handle.baudrate = BAUD_1MBPS;
-  rf_handle.power = MIN_POWER;
-  rf_handle.channel = 12; 								//126 channel support
-  rf_handle.is_enable_payload_ack = true;
-  rf_handle.payload_size = 32;            // Match the data being sent
+  rf_handle.dynamic_pay_load = false;
 
   //========END CONFIGURATION==========
   rf24_init(&rf_handle);
-  rf24_pipeData_rx_open(&rf_handle, PIPE1, rx_address);
-  rf24_pipeData_tx_registry(&rf_handle, tx_address);
+
+  rf_handle.channel = 12;
+  memcpy(rf_handle.tx_addr, tx_address, MAX_ADDRESS);
   rf24_tx_mode(&rf_handle);
 
-  print_tc_function(&rf_handle, PIPE1);
-
-  uint8_t send_val = 2;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -141,11 +136,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  rf24_listen_stop(&rf_handle);
-	  printf("send data:...\r\n");
-	  rf24_write_data(&rf_handle, &send_val, ONE_BYTE, W_DATA);
+	  if (rf24_write_data(&rf_handle, (uint8_t*)tx_data, strlen(tx_data)) != 0)
+	  {
+		  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	  }
+	  else
+	  {
+		  HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
+	  }
 
-	  HAL_Delay(100);
+	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -276,17 +276,30 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(I_LED_GPIO_Port, I_LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : CS_Pin */
-  GPIO_InitStruct.Pin = CS_Pin;
+  /*Configure GPIO pin : I_LED_Pin */
+  GPIO_InitStruct.Pin = I_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(I_LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_Pin CS_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : CE_Pin */
   GPIO_InitStruct.Pin = CE_Pin;

@@ -39,13 +39,13 @@
 #define CONFIG_REG		0x00
 #define EN_AA   		0x01
 #define EN_RX_ADDR		0x02 //for special pipe to communication
-#define SET_ADDR_WID	0x03
+#define ADDR_WID    	0x03
 #define SET_AUTO_RETRS	0x04
 #define RF_CH			0x05
 #define RF_SETUP    	0x06
 #define STATUS_REG		0x07
 #define OBSERVE_TX		0x08
-//
+#define RPD             0x09
 #define TX_ADDR			0x10
 #define RX_PW_P0		0x11
 #define RX_PW_P1        0x12
@@ -54,6 +54,7 @@
 #define RX_PW_P4		0x15
 #define RX_PW_P5		0x16
 #define FIFO_STATUS     0x17
+#define DYNPD           0x1C
 #define FEATURE         0x1D
 #define ONE_SECTION_BUF 32
 
@@ -89,7 +90,7 @@
 #define TX_DS       5
 #define MAX_RT      4
 #define RX_P_NO     1
-#define TX_FULL     0
+#define TX_FULL     5
 #define PLOS_CNT    4
 #define ARC_CNT     0
 #define TX_REUSE    6
@@ -117,6 +118,7 @@
 #define RX_PIPE_NULL_0	0
 #define ONE_BYTE        1
 #define ADDR_WD_OFFSET  2
+#define SPI_TIMEOUT     100
 
 #define PIPE0 0
 #define PIPE1 1
