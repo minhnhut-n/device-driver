@@ -113,11 +113,6 @@ void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8
             return;
         }
         size = minValue(size, rf->payload_size);
-        // In fixed payload mode, ensure we write exactly payload_size bytes
-        uint8_t pad[32] = {0}; // Max payload size is 32
-        memcpy(pad, buffer, size);
-        buffer = pad;
-        size = rf->payload_size;
     } else {
         size = minValue(size, ONE_SECTION_BUF);
     }
@@ -137,11 +132,11 @@ void rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, uint8
     if (HAL_SPI_Transmit(rf->cfg.hspi, buffer, size, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
     }
+    spi_endTransaction(rf);
 
     rf24_ce_pin(rf, BIT_ENABLE);
     HAL_Delay(1);
     rf24_ce_pin(rf, BIT_DISABLE);
-    spi_endTransaction(rf);
 }
 
 /**
@@ -259,20 +254,20 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 /**
  * @brief Power set for rf24
  */
-void rf24_power_set(RF24_Handle *rf, uint8_t status)
+void rf24_PA_set(RF24_Handle *rf, uint8_t status)
 {
     uint8_t config = 0;
-    rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
-    printf("Power set CONFIG info: %02x\r\n", config);
+    rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
+    printf("Power set RF_SETUP info: %02x\r\n", config);
 
     if (status) {
-        config |= (1 << 1);
+        config |= (1 << PWR_UP);
     }
     else {
-        config &= ~(1 << 1);
+        config &= ~(1 << PWR_UP);
     }
 
-    printf("Power set CONFIG after info: %02x\r\n", config);
+    printf("Power set RF_SETUP after info: %02x\r\n", config);
     rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
 }
 
@@ -353,7 +348,7 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addr
 void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
 {
     uint8_t value = 0;
-    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    rf24_read_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
     value &= ~(ENABLE << pipeNum);
     rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
 
@@ -521,74 +516,37 @@ uint8_t rf24_init(RF24_Handle *rf)
  */
 
 void print_tc_function(RF24_Handle *rf, uint8_t pipeNum) {
-    //check pipe open/close
-    printf("\r\ncheck pipe open/close =======\r\n");
-    uint8_t en_bit_1 = 0;
-    uint8_t en_bit_2 = 0;
-    const uint8_t *str = (const uint8_t *)"nhutn";
-    uint8_t buffer1[MAX_ADDRESS] = "nhutn";
-    uint8_t buffer2[MAX_ADDRESS] = {0};
-    uint8_t targetPipeAddr = pipeAddr[PIPE0];
-    
-    rf24_read_reg(rf, EN_RX_ADDR, &en_bit_1, ONE_BYTE);
-    rf24_pipeData_rx_open(rf, PIPE0, buffer1);
-    rf24_read_reg(rf, EN_RX_ADDR, &en_bit_2, ONE_BYTE);
-    rf24_read_reg(rf, targetPipeAddr, buffer2, MAX_ADDRESS);
+    printf("\n==>> Test function <<==\r\n");
+    uint8_t check = 0;
+    rf24_read_reg(rf, CONFIG_REG, &check, ONE_BYTE);
+    printf("Value: %02X\r\n", check);
 
-    if (en_bit_1 != en_bit_2) printf("TRUE!(%d)\r\n", __LINE__);
-    else printf("FALSE!(%d)\r\n", __LINE__);
+    printf("==>> AutoACK mode <<==\r\n");
+    check = 0;
+    rf24_read_reg(rf, EN_AA, &check, ONE_BYTE);
+    printf("Value: %02X\r\n", check);
 
-    if (!memcmp(buffer1, buffer2, MAX_ADDRESS)) printf("TRUE!(%d)\r\n", __LINE__);
-    else printf("FALSE!(%d)\r\n", __LINE__);
+    printf("==>> Address config <<==\r\n");
+    check = 0;
+    rf24_read_reg(rf, SET_ADDR_WID, &check, ONE_BYTE);
+    printf("Value: %02X\r\n", check);
 
-    rf24_pipeData_rx_close(rf, PIPE0);
-    rf24_read_reg(rf, EN_RX_ADDR, &en_bit_1, ONE_BYTE);
-    if (en_bit_1 != en_bit_2) printf("TRUE!(%d)\r\n", __LINE__);
-    else printf("FALSE!(%d)\r\n", __LINE__);
+    printf("==>> Channel config <<==\r\n");
+    check = 0;
+    rf24_read_reg(rf, RF_CH, &check, ONE_BYTE);
+    printf("Value: %02X\r\n", check);
 
-    //check TX buffer
-    printf("check tx buffer =======\r\n");
-    rf24_pipeData_tx_registry(rf, str);
-    rf24_read_reg(rf, pipeAddr[PIPE0], buffer2, MAX_ADDRESS);
-    rf24_read_reg(rf, TX_ADDR, buffer1, MAX_ADDRESS);
-    if (!memcmp(buffer1, buffer2, MAX_ADDRESS) && !memcmp(buffer1, (const uint8_t*)str, MAX_ADDRESS))
-        printf("TRUE!(%d)\r\n", __LINE__);
-    else 
-        printf("FALSE!(%d)\r\n", __LINE__);
+    printf("==>> Baudrate config <<==\r\n");
+    check = 0;
+    rf24_read_reg(rf, RF_SETUP, &check, ONE_BYTE);
+    printf("Value: %02X\r\n", check);
 
-    //check rx/tx mode switch
-    printf("check tx/rx switch mode =======\r\n");
-    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
-    printf("config reg data: %02x\r\n", en_bit_1);
-    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
-    printf("status reg data: %02x\r\n", en_bit_2);
-    if (en_bit_1 & (RX_MODE << PRIM_RX))
-        rf24_tx_mode(rf);
-    else
-        rf24_rx_mode(rf);
-    
-    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
-    printf("after config reg data: %02x\r\n", en_bit_1);
-    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
-    printf("after status reg data: %02x\r\n", en_bit_2);
-
-    //check standby mode
-    printf("check standby mode =======\r\n");
-    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
-    printf("standby mode: %02x\r\n", en_bit_1);
-
-    //check listening start/stop
-    printf("check listen start/stop mode =======\r\n");
-    rf24_listen_start(rf);
-    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
-    printf("config reg data: %02x\r\n", en_bit_1);
-    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
-    printf("status reg data: %02x\r\n", en_bit_2);
-    rf24_listen_stop(rf);
-    rf24_read_reg(rf, CONFIG_REG, &en_bit_1, ONE_BYTE);
-    printf("after config reg data: %02x\r\n", en_bit_1);
-    rf24_read_reg(rf, STATUS_REG, &en_bit_2, ONE_BYTE);
-    printf("after status reg data: %02x\r\n", en_bit_2);
+    printf("==>> Pipe Address	<<==\r\n");
+    uint8_t buff[MAX_ADDRESS];
+    uint8_t pipeChose = pipeAddr[pipeNum];
+    rf24_read_reg(rf, pipeChose, buff, MAX_ADDRESS);
+    for (int i = 0; i <  MAX_ADDRESS; i++)
+        printf("Value: %02X\r\n", buff[i]);
 }
 
 void print_state_init(RF24_Handle *rf, uint8_t pipeNum)
