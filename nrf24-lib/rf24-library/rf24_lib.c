@@ -164,35 +164,24 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     rf24_ce_pin(rf, BIT_DISABLE);
 
     uint8_t status = 0;
-    uint8_t ff_status = 0;
     rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-    rf24_read_reg(rf, FIFO_STATUS, &ff_status, ONE_BYTE);
-    //check tx fifo is empty or not AND device connect or not (if it die/disconnect, always 0 bit will be 1)
-    if ( (ff_status & (1 << TX_EMPTY)) && !(ff_status & (1 << 3)) )
+   
+    if (status & (1 << TX_DS))
     {
-        if (status & (1 << TX_DS))
-        {
-        	printf("Flag interrupt is clear!\r\n");
-        	rf24_clear_irq(rf);
-            return 1;
-        }
-        else
-        {
-            printf("TX Failed or Timeout\r\n");
-        }
+        printf("Flag interrupt is clear!\r\n");
+        rf24_clear_irq(rf);
+        return 1;
     }
     else
     {
-        printf("TX FIFO not empty/ device disconnect/ Fail on sending data\r\n");
+        printf("TX Failed or Timeout\r\n");
     }
-
     //check fail
     if (status & (1 << MAX_RT))
     {
-		rf24_clear_irq(rf);
+        rf24_clear_irq(rf);
         rf24_empty_tx_buffer(rf);
         printf("TX failed (MAX_RT)\r\n");
-        return 0;
     }
 
     return 0;
