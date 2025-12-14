@@ -117,6 +117,26 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         size = minValue(size, ONE_SECTION_BUF);
     }
 
+    uint8_t ff_status = 0;
+    rf24_read_reg(rf, FIFO_STATUS, &ff_status, ONE_BYTE);
+    //check tx fifo is empty or not AND device connect or not (if it die/disconnect, always 0 bit will be 1)
+    if ( (ff_status & (1 << TX_EMPTY)) && !(ff_status & (1 << 3)) )
+    {
+        // nothings
+        // printf("TX FIFO is empty AND device is still connected\r\n");
+    }
+    else {
+        if ( !(ff_status & (1 << 3)) )
+        {
+        	printf("Flush TX buffer\r\n");
+            rf24_empty_tx_buffer(rf);
+        }
+        else
+        {
+            printf("Device is disconnected\r\n");
+        }
+    }
+
     //Transmission set
     spi_beginTransaction(rf);
     uint8_t cmd = W_PAY_LOAD;
@@ -125,24 +145,22 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         return 0;
     }
 
-    if (HAL_SPI_Transmit(rf->cfg.hspi, buffer, size, RF_SPI_TIMEOUT) != HAL_OK) {
+    if (HAL_SPI_Transmit(rf->cfg.hspi, buffer, size, SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
         return 0;
     }
     spi_endTransaction(rf);
 
-    HAL_Delay(1);
+    rf24_ce_pin(rf, BIT_ENABLE);
+    HAL_Delay(1);              // >= 10us
+    rf24_ce_pin(rf, BIT_DISABLE);
 
-    uint8_t ff_status = 0;
-    rf24_read_reg(rf, FIFO_STATUS, &ff_status, ONE_BYTE);
-    if ( (ff_status & (1 << TX_EMPTY)) && !(ff_status & (1 << 3)) ) {
-        printf("TX FIFO is success\r\n");
-        rf24_empty_tx_buffer(rf);
-        rf24_reset(rf, FIFO_STATUS);
+    uint8_t status = 0;
+    rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
+    if (status & (1 << TX_DS)) {
+        uint8_t clear = (1 << TX_DS);
+        rf24_write_reg(rf, STATUS_REG, &clear, ONE_BYTE);
         return 1;
-    }
-    else {
-        printf("TX FIFO is failed\r\n");
     }
     return 0;
 }
@@ -465,8 +483,6 @@ void rf24_tx_mode(RF24_Handle *rf)
     // uint8_t irq_data = RF24_IRQ_ALL;
     // rf24_write_reg(rf, STATUS_REG, &irq_data, ONE_BYTE);
 
-    //enable ce pin
-    rf24_ce_pin(rf, BIT_ENABLE);
 }
 
 /**

@@ -59,9 +59,18 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-RF24_Handle rf;
-/* Buffer nhận tối đa 32 byte */
-uint8_t rx_buf[32];
+//debug with UART port
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+
+RF24_Handle rf_handle;
+
+uint8_t rxAddress[] = {0x00,0x00,0x00,0x00,0x02};
+uint8_t rxData[32];
+uint8_t data[50];
 
 /* USER CODE END 0 */
 
@@ -98,7 +107,20 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  printf("Receiver ready...\r\n");
+  //========RF_CONFIGURATION==========
+  rf_handle.cfg.cePin = CE_Pin;
+  rf_handle.cfg.cePort = CE_GPIO_Port;
+  rf_handle.cfg.csnPin = CS_Pin;
+  rf_handle.cfg.csnPort = CS_GPIO_Port;
+  rf_handle.cfg.hspi = &hspi2;
+
+  rf_handle.dynamic_pay_load = false;
+
+  //========END CONFIGURATION==========
+  rf24_init(&rf_handle);
+
+  rf_handle.channel = 12;
+  rf24_rx_mode(&rf_handle, PIPE1, rxAddress);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -108,6 +130,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	if (rf24_is_dataAvailable(&rf_handle, PIPE1))
+	{
+		rf24_read_data(&rf_handle, rxData, ONE_SECTION_BUF);
+	}
+
+	for (uint8_t index = 0; index < ONE_SECTION_BUF; index++)
+	{
+		printf("%02X ", rxData[index]);
+	}
+	printf("\r\n");
   }
   /* USER CODE END 3 */
 }
@@ -238,17 +270,30 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(I_LED_GPIO_Port, I_LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pin : CS_Pin */
-  GPIO_InitStruct.Pin = CS_Pin;
+  /*Configure GPIO pin : I_LED_Pin */
+  GPIO_InitStruct.Pin = I_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(I_LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_Pin CS_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : CE_Pin */
   GPIO_InitStruct.Pin = CE_Pin;
