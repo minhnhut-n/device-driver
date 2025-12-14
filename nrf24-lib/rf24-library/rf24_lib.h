@@ -37,9 +37,7 @@ typedef struct {
     uint8_t channel;
     uint8_t baudrate;
     uint8_t power_amplifier;
-    bool dynamic_pay_load;
     uint8_t payload_size;
-    uint8_t pipe_auto_ack;
     /**
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
      * that need to restore to it own pipe 0 data.
@@ -50,7 +48,8 @@ typedef struct {
     bool is_restore_pipe0_addr;
     bool is_enable_payload_ack;
     bool is_tx_mode;
-
+    bool dynamic_pay_load;
+    bool is_auto_ack;
 } RF24_Handle;
 
 /**
@@ -188,19 +187,6 @@ void rf24_tx_mode(RF24_Handle *rf);
 void rf24_standby_mode(RF24_Handle *rf);
 
 /**
- * @brief Start mode listening on RF24
- * @def when listening start, mode turn from TX -> RX mode
- * then device could you rf24_read to read value from rf24
- */
-void rf24_listen_start(RF24_Handle *rf);
-/**
- * @brief Stop mode listening on RF24
- * @def this function mean, when listening is done, close 
- * section and return to default (tx mode)
- */
-void rf24_listen_stop(RF24_Handle *rf);
-
-/**
  * @brief Empty buffer TX
  */
 void rf24_empty_tx_buffer(RF24_Handle *rf);
@@ -222,6 +208,14 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel);
  * @brief Baudrate set for rf24
  */
 void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate);
+/**
+ * @brief Auto Acknowledgment enable for rf24
+ */
+void rf24_autoAck_enable(RF24_Handle *rf, bool type);
+/**
+ * @brief Auto Acknowledgment configuration for rf24
+ */
+void rf24_autoAck_config(RF24_Handle *rf);
 
 /**
  * @brief: init rf24 module

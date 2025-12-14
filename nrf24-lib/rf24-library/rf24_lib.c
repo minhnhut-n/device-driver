@@ -25,15 +25,40 @@ static const uint8_t pipeAddr[6] = {RX_PIPE_ADDR_0, RX_PIPE_ADDR_1, RX_PIPE_ADDR
  * 
  * =============================================================================
  */
-static void rf24_autoAck_enable(RF24_Handle *rf, uint8_t pipe)
+static inline void rf24_clear_irq(RF24_Handle *rf)
 {
+    uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
+    rf24_write_reg(rf, STATUS_REG, &clr, 1);
+}
+
+void rf24_autoAck_enable(RF24_Handle *rf, bool type)
+{
+    rf24_ce_pin(rf, BIT_DISABLE);
     uint8_t config = 0;
 
-    rf24_read_reg(rf, EN_AA, &config, ONE_BYTE);
-    printf("Autoack EN_AA info: %02x\r\n", config);
-    config |= (1 << pipe);
+    if (type)
+    {
+        config = 0x3F; //enable all pipe
+        rf->is_auto_ack = true;
+    }
+    else
+    {
+        config = 0x00; //disable all pipe
+        rf->is_auto_ack = false;   
+    }
+
     rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
-    printf("Autoack EN_AA after info: %02x\r\n", config);
+    rf24_ce_pin(rf, BIT_ENABLE);
+}
+
+/**
+ * @brief Auto Acknowledgment configuration for rf24
+ */
+void rf24_autoAck_config(RF24_Handle *rf)
+{
+    uint8_t config = 0;
+    config |= (RE_ACK_TIME / 250) << 4 | (RE_ACK_COUNT << 0);
+    rf24_write_reg(rf, SET_AUTO_RETRS, &config, ONE_BYTE);
 }
 
 /**
@@ -117,25 +142,8 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         size = minValue(size, ONE_SECTION_BUF);
     }
 
-    uint8_t ff_status = 0;
-    rf24_read_reg(rf, FIFO_STATUS, &ff_status, ONE_BYTE);
-    //check tx fifo is empty or not AND device connect or not (if it die/disconnect, always 0 bit will be 1)
-    if ( (ff_status & (1 << TX_EMPTY)) && !(ff_status & (1 << 3)) )
-    {
-        // nothings
-        // printf("TX FIFO is empty AND device is still connected\r\n");
-    }
-    else {
-        if ( !(ff_status & (1 << 3)) )
-        {
-        	printf("Flush TX buffer\r\n");
-            rf24_empty_tx_buffer(rf);
-        }
-        else
-        {
-            printf("Device is disconnected\r\n");
-        }
-    }
+    //clear bit IQR of TX before sending
+    rf24_clear_irq(rf);
 
     //Transmission set
     spi_beginTransaction(rf);
@@ -152,16 +160,41 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     spi_endTransaction(rf);
 
     rf24_ce_pin(rf, BIT_ENABLE);
-    HAL_Delay(1);              // >= 10us
+    HAL_Delay(1);
     rf24_ce_pin(rf, BIT_DISABLE);
 
     uint8_t status = 0;
+    uint8_t ff_status = 0;
     rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-    if (status & (1 << TX_DS)) {
-        uint8_t clear = (1 << TX_DS);
-        rf24_write_reg(rf, STATUS_REG, &clear, ONE_BYTE);
-        return 1;
+    rf24_read_reg(rf, FIFO_STATUS, &ff_status, ONE_BYTE);
+    //check tx fifo is empty or not AND device connect or not (if it die/disconnect, always 0 bit will be 1)
+    if ( (ff_status & (1 << TX_EMPTY)) && !(ff_status & (1 << 3)) )
+    {
+        if (status & (1 << TX_DS))
+        {
+        	printf("Flag interrupt is clear!\r\n");
+        	rf24_clear_irq(rf);
+            return 1;
+        }
+        else
+        {
+            printf("TX Failed or Timeout\r\n");
+        }
     }
+    else
+    {
+        printf("TX FIFO not empty/ device disconnect/ Fail on sending data\r\n");
+    }
+
+    //check fail
+    if (status & (1 << MAX_RT))
+    {
+		rf24_clear_irq(rf);
+        rf24_empty_tx_buffer(rf);
+        printf("TX failed (MAX_RT)\r\n");
+        return 0;
+    }
+
     return 0;
 }
 
@@ -253,7 +286,6 @@ void rf24_powerConsumption_set(RF24_Handle *rf)
 void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
 {
     uint8_t reset = 0;
-    printf("Channel set RF_CH info: %02x\r\n", 0);
     rf24_read_reg(rf, RF_CH, &reset, ONE_BYTE);
 
     if(channel > 125 || channel < 0)
@@ -261,8 +293,6 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
         printf("Channel set invalid\r\n");
         return;
     }
-
-    printf("Channel set RF_CH info: %02x\r\n", channel);
     rf24_write_reg(rf, RF_CH, &channel, ONE_BYTE);
 }
 
@@ -442,11 +472,6 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
     
     rf24_write_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg, ONE_BYTE);
 
-    // //Clear tx/rx interrupt flag in STATUS REG <important>
-    // uint8_t irq_data = RF24_IRQ_ALL;
-    // rf24_write_reg(rf, STATUS_REG, &irq_data, ONE_BYTE);
-
-
     rf24_ce_pin(rf, BIT_ENABLE);
 }
 
@@ -464,6 +489,8 @@ void rf24_tx_mode(RF24_Handle *rf)
     rf24_channel_set(rf, rf->channel);
     //write tx address
     rf24_write_reg(rf, TX_ADDR, rf->tx_addr, MAX_ADDRESS);
+    //write ack address (pipe0)
+    rf24_write_reg(rf, RX_PIPE_ADDR_0, rf->tx_addr, MAX_ADDRESS);
 
     //power up and set to tx mode
     uint8_t config = 0;
@@ -478,11 +505,6 @@ void rf24_tx_mode(RF24_Handle *rf)
 
     //save config for later use
     rf->cfg.rf24_config_reg = config;
-
-    // //Clear tx/rx interrupt flag in STATUS REG <important>
-    // uint8_t irq_data = RF24_IRQ_ALL;
-    // rf24_write_reg(rf, STATUS_REG, &irq_data, ONE_BYTE);
-
 }
 
 /**
@@ -504,44 +526,6 @@ void rf24_standby_mode(RF24_Handle *rf)
     rf->is_tx_mode = false;
     HAL_Delay(1);
 }
-
-/**
- * @brief Start mode listening on RF24
- * @def when listening start, mode turn from TX -> RX mode
- * then device could you rf24_read to read value from rf24
- */
-//void rf24_listen_start(RF24_Handle *rf)
-//{
-//    rf24_rx_mode(rf);
-//
-//    //logic for recovering addr on pipe0
-//    if (rf->is_restore_pipe0_addr) {
-//        rf24_write_reg(rf, RX_PIPE_ADDR_0, rf->pipe0_rx_addr, MAX_ADDRESS);
-//    }
-//    else {
-//        //this is close for ack data event, not receive user data at this time
-//        rf24_pipeData_rx_close(rf, PIPE0);
-//    }
-//}
-
-/**
- * @brief Stop mode listening on RF24
- * @def this function mean, when listening is done, close 
- * section and return to default (standby mode)
- */
-//void rf24_listen_stop(RF24_Handle *rf)
-//{
-//    rf24_standby_mode(rf);
-//    HAL_Delay(1);
-//
-//    //reset ack for tx flag
-//    if (rf->is_enable_payload_ack) {
-//        rf24_empty_tx_buffer(rf);
-//    }
-//
-//    rf->cfg.rf24_config_reg &= ~(BIT_ENABLE << PRIM_RX);
-//    rf24_write_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg, ONE_BYTE);
-//}
 
 /**
  * @brief Empty buffer TX
@@ -588,9 +572,6 @@ void rf24_init(RF24_Handle *rf)
     //config later
     rf24_write_reg(rf, CONFIG_REG, &reset_val, ONE_BYTE);
     
-    //no auto ack
-    rf24_write_reg(rf, EN_AA, &reset_val, ONE_BYTE);
-    
     //disable rx addr
     rf24_write_reg(rf, EN_RX_ADDR, &reset_val, ONE_BYTE);
     
@@ -609,6 +590,12 @@ void rf24_init(RF24_Handle *rf)
     rf24_empty_rx_buffer(rf);
     rf24_empty_tx_buffer(rf);
 
+    rf24_autoAck_enable(rf, true);
+    if (rf->is_auto_ack) {
+        // set auto ack configuration
+        rf24_autoAck_config(rf);
+    }
+
     //enable ce pin again after init
     rf24_ce_pin(rf, BIT_ENABLE);
 
@@ -622,8 +609,8 @@ void rf24_init(RF24_Handle *rf)
 void rf24_reset(RF24_Handle *rf, uint8_t reg)
 {
     if (reg == STATUS_REG) {
-        uint8_t reset_val = 0x00;
-        rf24_write_reg(rf, STATUS_REG, &reset_val, ONE_BYTE);
+    	uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
+    	rf24_write_reg(rf, STATUS_REG, &clr, 1);
     }
     else if (reg == FIFO_STATUS) {
         uint8_t reset_val = 0x11;

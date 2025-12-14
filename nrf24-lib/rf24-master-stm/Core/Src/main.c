@@ -126,6 +126,7 @@ int main(void)
   rf_handle.channel = 12;
   memcpy(rf_handle.tx_addr, tx_address, MAX_ADDRESS);
   rf24_tx_mode(&rf_handle);
+  
 
   /* USER CODE END 2 */
 
@@ -145,7 +146,7 @@ int main(void)
 		  HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
 	  }
 
-	  HAL_Delay(50);
+	  HAL_Delay(200);
   }
   /* USER CODE END 3 */
 }
