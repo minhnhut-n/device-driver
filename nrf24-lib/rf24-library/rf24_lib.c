@@ -179,10 +179,11 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     //check fail
     if (status & (1 << MAX_RT))
     {
-        rf24_clear_irq(rf);
-        rf24_empty_tx_buffer(rf);
         printf("TX failed (MAX_RT)\r\n");
     }
+
+    rf24_clear_irq(rf);
+    rf24_empty_tx_buffer(rf);
 
     return 0;
 }
