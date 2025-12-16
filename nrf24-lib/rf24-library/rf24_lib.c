@@ -27,38 +27,17 @@ static const uint8_t pipeAddr[6] = {RX_PIPE_ADDR_0, RX_PIPE_ADDR_1, RX_PIPE_ADDR
  */
 static inline void rf24_clear_irq(RF24_Handle *rf)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
     rf24_write_reg(rf, STATUS_REG, &clr, 1);
-}
 
-void rf24_autoAck_enable(RF24_Handle *rf, bool type)
-{
-    rf24_ce_pin(rf, BIT_DISABLE);
-    uint8_t config = 0;
-
-    if (type)
-    {
-        config = 0x3F; //enable all pipe
-        rf->is_auto_ack = true;
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
     }
-    else
-    {
-        config = 0x00; //disable all pipe
-        rf->is_auto_ack = false;   
-    }
-
-    rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
-    rf24_ce_pin(rf, BIT_ENABLE);
-}
-
-/**
- * @brief Auto Acknowledgment configuration for rf24
- */
-void rf24_autoAck_config(RF24_Handle *rf)
-{
-    uint8_t config = 0;
-    config |= (RE_ACK_TIME / 250) << 4 | (RE_ACK_COUNT << 0);
-    rf24_write_reg(rf, SET_AUTO_RETRS, &config, ONE_BYTE);
 }
 
 /**
@@ -127,6 +106,11 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
  */
 uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     if (buffer == NULL) {
         printf("rf24_write_data: buffer is NULL -> abort\r\n");
         return 0;
@@ -184,6 +168,9 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     rf24_clear_irq(rf);
     rf24_empty_tx_buffer(rf);
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
 
     return 0;
 }
@@ -201,7 +188,11 @@ void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size)
         size = ONE_SECTION_BUF;
     }
 
-    rf24_ce_pin(rf, BIT_DISABLE);
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     //receive action
     spi_beginTransaction(rf);
     uint8_t cmd = R_PAY_LOAD;
@@ -214,7 +205,10 @@ void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size)
         printf("Error when write data %02X \r\n", cmd);
     }
     spi_endTransaction(rf);
-    rf24_ce_pin(rf, BIT_ENABLE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
 }
 
 /**
@@ -242,6 +236,11 @@ bool rf24_is_dataAvailable(RF24_Handle *rf, uint8_t pipeNum)
  */
 bool isValid_AddrWidth(RF24_Handle *rf)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     uint8_t rtn = 0;
     rf24_read_reg(rf, ADDR_WID, &rtn, ONE_BYTE);
 
@@ -251,6 +250,10 @@ bool isValid_AddrWidth(RF24_Handle *rf)
         return true;
     }
     
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
+
     return false;
 }
 
@@ -259,6 +262,11 @@ bool isValid_AddrWidth(RF24_Handle *rf)
  */
 void rf24_powerConsumption_set(RF24_Handle *rf)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+
     uint8_t config = 0;
     rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
     printf("power consumtion RF_SETUP info: %02x\r\n", config);
@@ -268,6 +276,10 @@ void rf24_powerConsumption_set(RF24_Handle *rf)
 
     rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
     printf("power consumtion RF_SETUP after info: %02x\r\n", config);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    } 
 }
 
 /**
@@ -275,6 +287,11 @@ void rf24_powerConsumption_set(RF24_Handle *rf)
  */
 void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+
     uint8_t reset = 0;
     rf24_read_reg(rf, RF_CH, &reset, ONE_BYTE);
 
@@ -284,6 +301,10 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
         return;
     }
     rf24_write_reg(rf, RF_CH, &channel, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    } 
 }
 
 /**
@@ -291,6 +312,11 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
  */
 void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+
     uint8_t config = 0;
     rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
     printf("Baudrate set RF_CH info: %02x\r\n", config);
@@ -311,6 +337,10 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 
     printf("Baudrate set RF_SETUP info: %02x\r\n", config);
     rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    } 
 }
 
 /**
@@ -318,6 +348,11 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
  */
 void rf24_PA_set(RF24_Handle *rf, uint8_t status)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+
     uint8_t config = 0;
     rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
     printf("Power set RF_SETUP info: %02x\r\n", config);
@@ -331,6 +366,10 @@ void rf24_PA_set(RF24_Handle *rf, uint8_t status)
 
     printf("Power set RF_SETUP after info: %02x\r\n", config);
     rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    } 
 }
 
 /**
@@ -359,6 +398,11 @@ void rf24_ce_pin(RF24_Handle *rf, bool status)
  */
 void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addressRX)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     if (pipeNum == PIPE0) {
         // recover address on pipe 0 (RX)
         memcpy(rf->pipe0_rx_addr, addressRX, MAX_ADDRESS);
@@ -403,6 +447,10 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addr
     rf24_read_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
     value |= (ENABLE << pipeNum);
     rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    } 
 }
 
 /**
@@ -410,6 +458,11 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addr
  */
 void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     uint8_t value = 0;
     rf24_read_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
     value &= ~(ENABLE << pipeNum);
@@ -420,6 +473,56 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
         rf->is_restore_pipe0_addr = false;
     }
     printf("PIPE%d is close!\r\n", pipeNum);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
+}
+
+void rf24_autoAck_enable(RF24_Handle *rf, bool type)
+{
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
+    uint8_t config = 0;
+
+    if (type)
+    {
+        config = 0x3F; //enable all pipe
+        rf->is_auto_ack = true;
+    }
+    else
+    {
+        config = 0x00; //disable all pipe
+        rf->is_auto_ack = false;   
+    }
+
+    rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
+}
+
+/**
+ * @brief Auto Acknowledgment configuration for rf24
+ */
+void rf24_autoAck_config(RF24_Handle *rf)
+{
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
+    uint8_t config = 0;
+    config |= (RE_ACK_TIME / 250) << 4 | (RE_ACK_COUNT << 0);
+    rf24_write_reg(rf, SET_AUTO_RETRS, &config, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
 }
 
 /**
@@ -427,8 +530,17 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
  */
 void rf24_pipeData_tx_registry(RF24_Handle *rf, const uint8_t* address)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     rf24_write_reg(rf, RX_PIPE_ADDR_0, address, MAX_ADDRESS);
     rf24_write_reg(rf, TX_ADDR, address, MAX_ADDRESS);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
 }
 
 /**
@@ -441,8 +553,10 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
     printf("Switch to RX mode on PIPE %d\r\n", pipeNum);
 
     //disable before config
-    rf24_ce_pin(rf, BIT_DISABLE);
-    
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+        
     //reset status register
     rf24_reset(rf, STATUS_REG);
     
@@ -474,7 +588,10 @@ void rf24_tx_mode(RF24_Handle *rf)
     rf->is_tx_mode = true;
 
     //disable before config
-    rf24_ce_pin(rf, BIT_DISABLE);
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     //write channel on transmit mode
     rf24_channel_set(rf, rf->channel);
     //write tx address
@@ -495,6 +612,9 @@ void rf24_tx_mode(RF24_Handle *rf)
 
     //save config for later use
     rf->cfg.rf24_config_reg = config;
+
+    //enable to enter tx mode
+    rf24_ce_pin(rf, BIT_ENABLE);
 }
 
 /**
@@ -522,10 +642,19 @@ void rf24_standby_mode(RF24_Handle *rf)
  */
 void rf24_empty_tx_buffer(RF24_Handle *rf)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     spi_beginTransaction(rf);
     uint8_t command = FLUSH_TX;
     HAL_SPI_Transmit(rf->cfg.hspi, &command, ONE_BYTE, SPI_TIMEOUT);
     spi_endTransaction(rf);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
 }
 
 /**
@@ -533,10 +662,19 @@ void rf24_empty_tx_buffer(RF24_Handle *rf)
  */
 void rf24_empty_rx_buffer(RF24_Handle *rf)
 {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
+    }
+    
     spi_beginTransaction(rf);
     uint8_t command = FLUSH_RX;
     HAL_SPI_Transmit(rf->cfg.hspi, &command, ONE_BYTE, SPI_TIMEOUT);
     spi_endTransaction(rf);
+
+    if (state == true) {
+        rf24_ce_pin(rf, BIT_ENABLE);
+    }
 }
 
 /**

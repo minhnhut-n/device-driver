@@ -127,7 +127,6 @@ int main(void)
   memcpy(rf_handle.tx_addr, tx_address, MAX_ADDRESS);
   rf24_tx_mode(&rf_handle);
   
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
