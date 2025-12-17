@@ -123,7 +123,7 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         }
         size = minValue(size, rf->payload_size);
     } else {
-        size = minValue(size, ONE_SECTION_BUF);
+        size = ONE_SECTION_BUF;
     }
 
     //clear bit IQR of TX before sending

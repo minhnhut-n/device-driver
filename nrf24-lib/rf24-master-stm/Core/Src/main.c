@@ -75,7 +75,6 @@ RF24_Handle rf_handle;
 const uint8_t tx_address[5] = {0x00, 0x00, 0x00, 0x00, 0x02};
 char tx_data[20] = "NhutNguyen";
 
-
 /* USER CODE END 0 */
 
 /**
@@ -122,6 +121,8 @@ int main(void)
 
   //========END CONFIGURATION==========
   rf24_init(&rf_handle);
+
+  rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
 
   rf_handle.channel = 12;
   memcpy(rf_handle.tx_addr, tx_address, MAX_ADDRESS);
