@@ -6,6 +6,7 @@
  */
 
 #include "rf24_lib.h"
+#include <string.h>
 
 /**
  * =============================================================================
@@ -106,6 +107,7 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
  */
 uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 {
+    uint8_t payloadBuf[32] = {0};
     bool state = rf->cfg.ce_status;
     if (rf->cfg.ce_status == true) {
         rf24_ce_pin(rf, BIT_DISABLE);
@@ -121,9 +123,18 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
             printf("rf24_write_data: payload_size == 0 (not initialized)\r\n");
             return 0;
         }
-        size = minValue(size, rf->payload_size);
-    } else {
+        //if size is over 1 section, it will be deleted the redundant content.
         size = minValue(size, ONE_SECTION_BUF);
+        memcpy(payloadBuf, buffer, size);
+    } else {
+        //only copy with available size on buffer
+        memcpy(payloadBuf, buffer, size);
+        //searching and padding
+        for (uint8_t index = size; index <= 32; index++) {
+            payloadBuf[index] = '.';
+        }
+        //set later for writing data
+        size = ONE_SECTION_BUF;
     }
 
     //clear bit IQR of TX before sending
