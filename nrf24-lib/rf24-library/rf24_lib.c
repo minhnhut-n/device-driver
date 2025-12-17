@@ -32,8 +32,8 @@ static inline void rf24_clear_irq(RF24_Handle *rf)
         rf24_ce_pin(rf, BIT_DISABLE);
     }
     
-    uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
-    rf24_write_reg(rf, STATUS_REG, &clr, 1);
+    uint8_t clr =(1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT);
+    rf24_write_reg(rf, STATUS_REG, &clr, ONE_BYTE);
 
     if (state == true) {
         rf24_ce_pin(rf, BIT_ENABLE);
@@ -149,21 +149,53 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     uint8_t status = 0;
     rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-   
-    if (status & (1 << TX_DS))
+
+    if (rf->is_auto_ack)
     {
-        printf("Flag interrupt is clear!\r\n");
-        rf24_clear_irq(rf);
-        return 1;
+        /**
+         * TX and Rx should be inited at same time or RX first to succces
+         * receive ack packet from TX
+         */
+        if (status & (1 << TX_DS))
+        {
+            printf("TX success (TX_DS)\r\n");
+            rf24_clear_irq(rf);
+            if (state == true) {
+                rf24_ce_pin(rf, BIT_ENABLE);
+            }
+            return 1;
+        }
+        if (status & (1 << RX_DR))
+        {
+            printf("New package received (RX_DR) on PIPE: %d\r\n", (status >> RX_P_NO) & 0x07);
+        }
+        if (status & (1 << MAX_RT))
+        {
+            printf("TX failed (MAX_RT)\r\n");
+            rf24_clear_irq(rf);
+            // rf24_empty_tx_buffer(rf);
+        }
+        /**
+         * Time can be delayed with time gap
+         * Retry_time ≈ ARC × (ARD × 250µs)
+         */
+        printf("TX pending...\r\n");
     }
     else
     {
-        printf("TX Failed or Timeout\r\n");
-    }
-    //check fail
-    if (status & (1 << MAX_RT))
-    {
-        printf("TX failed (MAX_RT)\r\n");
+        /**
+         * On TX without ACK, TX_DS was set immediately after the package
+         * is transmitted
+         */
+        if (status & (1 << TX_DS))
+        {
+            printf("TX success (TX_DS)\r\n");
+            rf24_clear_irq(rf);
+            if (state == true) {
+                rf24_ce_pin(rf, BIT_ENABLE);
+            }
+            return 1;
+        }
     }
 
     rf24_clear_irq(rf);
@@ -217,13 +249,11 @@ void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size)
 bool rf24_is_dataAvailable(RF24_Handle *rf, uint8_t pipeNum)
 {
     uint8_t status = 0;
+    uint8_t rx_p_no = 0;
     rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
+    rx_p_no = (status >> RX_P_NO) & 0x07;
 
-    if ((status & (1 << RX_DR)) && (status & (1 << pipeNum))) {
-        //reset rx_dr flag
-        status |= (1 << RX_DR);
-        rf24_write_reg(rf, STATUS_REG, &status, ONE_BYTE);
-        
+    if ((status & (1 << RX_DR)) && (rx_p_no == pipeNum)) {  
         return true;
     }
     return false;
@@ -517,7 +547,7 @@ void rf24_autoAck_config(RF24_Handle *rf)
     }
     
     uint8_t config = 0;
-    config |= (RE_ACK_TIME / 250) << 4 | (RE_ACK_COUNT << 0);
+    config |= (RE_ACK_TIME / 250 - 1) << 4 | (RE_ACK_COUNT << 0);
     rf24_write_reg(rf, SET_AUTO_RETRS, &config, ONE_BYTE);
 
     if (state == true) {
@@ -699,7 +729,11 @@ void rf24_init(RF24_Handle *rf)
     
     //config later
     rf24_write_reg(rf, CONFIG_REG, &reset_val, ONE_BYTE);
-    
+	 uint8_t config = 0;
+	 config |= (1 << EN_CRC);   // enable CRC
+	 config &= ~(1 << CRCO);    // CRC 8 bit (match Arduino)
+	 rf24_write_reg(rf, CONFIG_REG, &config, ONE_BYTE);
+
     //disable rx addr
     rf24_write_reg(rf, EN_RX_ADDR, &reset_val, ONE_BYTE);
     
