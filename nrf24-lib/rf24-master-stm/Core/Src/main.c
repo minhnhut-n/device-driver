@@ -73,7 +73,7 @@ int _write(int file, char *ptr, int len)
 
 RF24_Handle rf_handle;
 const uint8_t tx_address[5] = {0x00, 0x00, 0x00, 0x00, 0x02};
-char tx_data[20] = "NhutNguyen";
+char tx_data[32] = "NhutNguyenNhutNguyenNhutNguyen02";
 
 /* USER CODE END 0 */
 
@@ -116,18 +116,41 @@ int main(void)
   rf_handle.cfg.csnPin = CS_Pin;
   rf_handle.cfg.csnPort = CS_GPIO_Port;
   rf_handle.cfg.hspi = &hspi2;
-
   rf_handle.dynamic_pay_load = false;
 
   //========END CONFIGURATION==========
   rf24_init(&rf_handle);
 
-  rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
+  //debug
+  printf("\n=== TX MODULE AFTER INIT ===\r\n");
+  uint8_t reg;
+  rf24_read_reg(&rf_handle, CONFIG_REG, &reg, 1);
+  printf("CONFIG: 0x%02X\r\n", reg);
+  rf24_read_reg(&rf_handle, EN_AA, &reg, 1);
+  printf("EN_AA: 0x%02X\r\n", reg);
+  rf24_read_reg(&rf_handle, RF_CH, &reg, 1);
+  printf("CHANNEL: %d\r\n", reg);
+  rf24_read_reg(&rf_handle, RF_SETUP, &reg, 1);
+  printf("RF_SETUP: 0x%02X\r\n", reg);
 
+  uint8_t addr[5];
+  rf24_read_reg(&rf_handle, TX_ADDR, addr, 5);
+  printf("TX_ADDR: %02X%02X%02X%02X%02X\r\n", 
+        addr[0], addr[1], addr[2], addr[3], addr[4]);
+  //end debug
+
+  rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
   rf_handle.channel = 12;
   memcpy(rf_handle.tx_addr, tx_address, MAX_ADDRESS);
   rf24_tx_mode(&rf_handle);
   
+  printf("\n=== TX MODULE AFTER CONFIG ===\r\n");
+  rf24_read_reg(&rf_handle, RF_CH, &reg, 1);
+  printf("CHANNEL: %d\r\n", reg);
+  rf24_read_reg(&rf_handle, RF_SETUP, &reg, 1);
+  printf("RF_SETUP: 0x%02X\r\n", reg);
+  printf("READY!!\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -146,7 +169,7 @@ int main(void)
 		  HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
 	  }
 
-	  HAL_Delay(200);
+	  HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }

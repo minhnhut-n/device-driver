@@ -195,7 +195,10 @@ void rf24_empty_tx_buffer(RF24_Handle *rf);
  */
 void rf24_empty_rx_buffer(RF24_Handle *rf);
 
-
+/**
+ * @brief Power set for rf24
+ */
+void rf24_power_enable_set(RF24_Handle *rf, uint8_t status);
 /**
  * @brief Power consumption for rf24
  */

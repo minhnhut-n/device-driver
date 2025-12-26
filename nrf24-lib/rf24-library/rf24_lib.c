@@ -121,13 +121,14 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
             printf("rf24_write_data: payload_size == 0 (not initialized)\r\n");
             return 0;
         }
-        size = minValue(size, rf->payload_size);
+        size = minValue(size, ONE_SECTION_BUF);
     } else {
         size = ONE_SECTION_BUF;
     }
 
     //clear bit IQR of TX before sending
     rf24_clear_irq(rf);
+    printf("buffer: %s\r\n", buffer);
 
     //Transmission set
     spi_beginTransaction(rf);
@@ -148,53 +149,57 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     rf24_ce_pin(rf, BIT_DISABLE);
 
     uint8_t status = 0;
-    rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-
-    if (rf->is_auto_ack)
+    uint32_t timeout = 100;
+    uint32_t start_time = HAL_GetTick();
+    while (HAL_GetTick() - start_time < timeout)
     {
-        /**
-         * TX and Rx should be inited at same time or RX first to succces
-         * receive ack packet from TX
-         */
-        if (status & (1 << TX_DS))
+        rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
+        if (rf->is_auto_ack)
         {
-            printf("TX success (TX_DS)\r\n");
-            rf24_clear_irq(rf);
-            if (state == true) {
-                rf24_ce_pin(rf, BIT_ENABLE);
+            /**
+             * TX and Rx should be inited at same time or RX first to succces
+             * receive ack packet from TX
+             */
+            if (status & (1 << TX_DS))
+            {
+                printf("TX success (TX_DS)\r\n");
+                rf24_clear_irq(rf);
+                if (state == true) {
+                    rf24_ce_pin(rf, BIT_ENABLE);
+                }
+                return 1;
             }
-            return 1;
-        }
-        if (status & (1 << RX_DR))
-        {
-            printf("New package received (RX_DR) on PIPE: %d\r\n", (status >> RX_P_NO) & 0x07);
-        }
-        if (status & (1 << MAX_RT))
-        {
-            printf("TX failed (MAX_RT)\r\n");
-            rf24_clear_irq(rf);
-            // rf24_empty_tx_buffer(rf);
-        }
-        /**
-         * Time can be delayed with time gap
-         * Retry_time ≈ ARC × (ARD × 250µs)
-         */
-        printf("TX pending...\r\n");
-    }
-    else
-    {
-        /**
-         * On TX without ACK, TX_DS was set immediately after the package
-         * is transmitted
-         */
-        if (status & (1 << TX_DS))
-        {
-            printf("TX success (TX_DS)\r\n");
-            rf24_clear_irq(rf);
-            if (state == true) {
-                rf24_ce_pin(rf, BIT_ENABLE);
+            if (status & (1 << RX_DR))
+            {
+                printf("New package received (RX_DR) on PIPE: %d\r\n", (status >> RX_P_NO) & 0x07);
             }
-            return 1;
+            if (status & (1 << MAX_RT))
+            {
+                printf("TX failed (MAX_RT)\r\n");
+                rf24_clear_irq(rf);
+                // rf24_empty_tx_buffer(rf);
+            }
+            /**
+             * Time can be delayed with time gap
+             * Retry_time ≈ ARC × (ARD × 250µs)
+             */
+            printf("TX pending...\r\n");
+        }
+        else
+        {
+            /**
+             * On TX without ACK, TX_DS was set immediately after the package
+             * is transmitted
+             */
+            if (status & (1 << TX_DS))
+            {
+                printf("TX success (TX_DS)\r\n");
+                rf24_clear_irq(rf);
+                if (state == true) {
+                    rf24_ce_pin(rf, BIT_ENABLE);
+                }
+                return 1;
+            }
         }
     }
 
@@ -376,7 +381,7 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 /**
  * @brief Power set for rf24
  */
-void rf24_PA_set(RF24_Handle *rf, uint8_t status)
+void rf24_power_enable_set(RF24_Handle *rf, uint8_t status)
 {
     bool state = rf->cfg.ce_status;
     if (rf->cfg.ce_status == true) {
@@ -384,8 +389,8 @@ void rf24_PA_set(RF24_Handle *rf, uint8_t status)
     }
 
     uint8_t config = 0;
-    rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
-    printf("Power set RF_SETUP info: %02x\r\n", config);
+    rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);  // CORRECT: CONFIG_REG
+    printf("Power set CONFIG_REG info: %02x\r\n", config);
 
     if (status) {
         config |= (1 << PWR_UP);
@@ -394,12 +399,16 @@ void rf24_PA_set(RF24_Handle *rf, uint8_t status)
         config &= ~(1 << PWR_UP);
     }
 
-    printf("Power set RF_SETUP after info: %02x\r\n", config);
-    rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
+    printf("Power set CONFIG_REG after info: %02x\r\n", config);
+    rf24_write_reg(rf, CONFIG_REG, &config, ONE_BYTE);  // CORRECT: CONFIG_REG
+    
+    if (status) {
+        HAL_Delay(2);  // Wait for power-up (1.5ms minimum)
+    }
 
     if (state == true) {
         rf24_ce_pin(rf, BIT_ENABLE);
-    } 
+    }
 }
 
 /**
@@ -632,7 +641,9 @@ void rf24_tx_mode(RF24_Handle *rf)
     //power up and set to tx mode
     uint8_t config = 0;
     rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
-    if ( !(config & (1 << PWR_UP)) ) {
+    bool was_powered_down = !(config & (1 << PWR_UP));
+
+    if ( was_powered_down ) {
         config |= (1 << PWR_UP);
     }
     if ( config & (1 << PRIM_RX) ) {
@@ -640,11 +651,12 @@ void rf24_tx_mode(RF24_Handle *rf)
     }
     rf24_write_reg(rf, CONFIG_REG, &config, ONE_BYTE);
 
+    if( was_powered_down ) {
+        HAL_Delay(2);
+    }
+
     //save config for later use
     rf->cfg.rf24_config_reg = config;
-
-    //enable to enter tx mode
-    rf24_ce_pin(rf, BIT_ENABLE);
 }
 
 /**
@@ -726,7 +738,10 @@ void rf24_init(RF24_Handle *rf)
 
     //disable ce pin
     rf24_ce_pin(rf, BIT_DISABLE);
-    
+
+    //power on
+    rf24_power_enable_set(rf, true);
+
     //config later
     rf24_write_reg(rf, CONFIG_REG, &reset_val, ONE_BYTE);
 	 uint8_t config = 0;
@@ -757,9 +772,6 @@ void rf24_init(RF24_Handle *rf)
         // set auto ack configuration
         rf24_autoAck_config(rf);
     }
-
-    //enable ce pin again after init
-    rf24_ce_pin(rf, BIT_ENABLE);
 
     printf("====  END INIT RF24   ====\r\n");
 }
