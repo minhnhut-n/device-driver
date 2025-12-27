@@ -217,6 +217,10 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type);
  * @brief Auto Acknowledgment configuration for rf24
  */
 void rf24_autoAck_config(RF24_Handle *rf);
+/**
+ * @brief: CRC setting for payload transmit
+ */
+void rf24_crc_setting(RF24_Handle *rf, bool state, uint8_t numCRCByte);
 
 /**
  * @brief: init rf24 module
