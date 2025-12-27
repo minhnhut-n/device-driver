@@ -40,7 +40,7 @@
 #define EN_AA   		0x01
 #define EN_RX_ADDR		0x02 //for special pipe to communication
 #define ADDR_WID    	0x03
-#define SET_AUTO_RETRS	0x04
+#define SETUP_RETR  	0x04
 #define RF_CH			0x05
 #define RF_SETUP    	0x06
 #define STATUS_REG		0x07
