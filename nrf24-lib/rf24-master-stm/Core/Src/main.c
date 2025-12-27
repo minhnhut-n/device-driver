@@ -127,6 +127,7 @@ int main(void)
   printf("Begin user config\r\n");
 
   rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
+  rf24_crc_setting(&rf_handle, true, RF24_CRC_16); //2 byte crc
   rf24_channel_set(&rf_handle, 12);
   rf24_tx_mode(&rf_handle, tx_address);
   rf24_dump_registers(&rf_handle);
