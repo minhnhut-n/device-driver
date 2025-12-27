@@ -34,8 +34,6 @@ typedef struct {
 
 typedef struct {
     RF24_Config cfg;
-    uint8_t channel;
-    uint8_t baudrate;
     uint8_t power_amplifier;
     uint8_t payload_size;
     /**
@@ -180,7 +178,7 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX);
 /**
  * @brief Configuration mode TX on RF24
  */
-void rf24_tx_mode(RF24_Handle *rf);
+void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address);
 /**
  * @brief Configuration mode STANDBY on RF24
  */
@@ -247,5 +245,7 @@ void print_state_init(RF24_Handle *rf, uint8_t pipeNum);
 void print_tc_function(RF24_Handle *rf, uint8_t pipeNum);
 void print_reg(const char *name, uint8_t value);
 void print_addr(const char *name, uint8_t *addr, uint8_t len);
+void rf24_dump_registers(RF24_Handle *rf);
+
 
 #endif /* INC_RF24_LIB_H_ */

@@ -106,109 +106,110 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
  */
 uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 {
-    bool state = rf->cfg.ce_status;
-    if (rf->cfg.ce_status == true) {
-        rf24_ce_pin(rf, BIT_DISABLE);
-    }
-    
     if (buffer == NULL) {
         printf("rf24_write_data: buffer is NULL -> abort\r\n");
         return 0;
     }
+    uint8_t status = 0;
+    uint8_t fifo_status = 0;
 
+    //pre-processsing data
+	uint8_t payloadTX[ONE_SECTION_BUF] = {0};
     if (rf->dynamic_pay_load) {
         if (rf->payload_size == 0) {
             printf("rf24_write_data: payload_size == 0 (not initialized)\r\n");
             return 0;
         }
         size = minValue(size, ONE_SECTION_BUF);
+    	memcpy(payloadTX, buffer, size);
     } else {
+    	memcpy(payloadTX, buffer, size);
+    	for (uint8_t index = size; index < ONE_SECTION_BUF; index++) {
+    		payloadTX[index] = 'x';
+    	}
         size = ONE_SECTION_BUF;
+    }
+
+    //transmission
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, BIT_DISABLE);
     }
 
     //clear bit IQR of TX before sending
     rf24_clear_irq(rf);
-    printf("buffer: %s\r\n", buffer);
+    printf("Sending: %s\r\n", payloadTX);
+    rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
+    printf("TX_DS status before: %d\r\n", (status&(1<<TX_DS)));
 
     //Transmission set
     spi_beginTransaction(rf);
     uint8_t cmd = W_PAY_LOAD;
+    if (! rf->is_auto_ack) {
+        cmd = W_NO_ACK_PAYLD;
+    }
+
     if (HAL_SPI_Transmit(rf->cfg.hspi, &cmd, ONE_BYTE, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
         return 0;
     }
 
-    if (HAL_SPI_Transmit(rf->cfg.hspi, buffer, size, SPI_TIMEOUT) != HAL_OK) {
+    if (HAL_SPI_Transmit(rf->cfg.hspi, payloadTX, size, SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
         return 0;
     }
     spi_endTransaction(rf);
 
-    rf24_ce_pin(rf, BIT_ENABLE);
+    //trigger send data in TX FIFO
+    rf24_ce_pin(rf, ENABLE);
     HAL_Delay(1);
-    rf24_ce_pin(rf, BIT_DISABLE);
+    rf24_ce_pin(rf, DISABLE);
 
-    uint8_t status = 0;
-    uint32_t timeout = 100;
-    uint32_t start_time = HAL_GetTick();
-    while (HAL_GetTick() - start_time < timeout)
-    {
+    if (!rf->is_auto_ack) {
+        /**
+         * On TX without ACK, TX_DS was set immediately after the package
+         * is transmitted
+         */
+        uint8_t irq_tx_done = 0;
+        uint8_t is_device_connected = 0;
         rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-        if (rf->is_auto_ack)
-        {
-            /**
-             * TX and Rx should be inited at same time or RX first to succces
-             * receive ack packet from TX
-             */
-            if (status & (1 << TX_DS))
-            {
-                printf("TX success (TX_DS)\r\n");
-                rf24_clear_irq(rf);
-                if (state == true) {
-                    rf24_ce_pin(rf, BIT_ENABLE);
-                }
-                return 1;
-            }
-            if (status & (1 << RX_DR))
-            {
-                printf("New package received (RX_DR) on PIPE: %d\r\n", (status >> RX_P_NO) & 0x07);
-            }
-            if (status & (1 << MAX_RT))
-            {
-                printf("TX failed (MAX_RT)\r\n");
-                rf24_clear_irq(rf);
-                // rf24_empty_tx_buffer(rf);
-            }
-            /**
-             * Time can be delayed with time gap
-             * Retry_time ≈ ARC × (ARD × 250µs)
-             */
-            printf("TX pending...\r\n");
+        irq_tx_done = status&(1<<TX_DS);
+        printf("TX_DS status after: %d\r\n", irq_tx_done);
+
+        if ( irq_tx_done ) {
+
+            rf24_clear_irq(rf);
         }
-        else
-        {
-            /**
-             * On TX without ACK, TX_DS was set immediately after the package
-             * is transmitted
-             */
-            if (status & (1 << TX_DS))
-            {
-                printf("TX success (TX_DS)\r\n");
-                rf24_clear_irq(rf);
-                if (state == true) {
-                    rf24_ce_pin(rf, BIT_ENABLE);
-                }
-                return 1;
-            }
+        else {
+            printf("[ERR] Interrupt was not set!!\r\n");
+        }
+
+        rf24_read_reg(rf, FIFO_STATUS, &fifo_status, ONE_BYTE);
+        is_device_connected = ((fifo_status >> 3) & 0x01);
+        printf("Device connect? (%d), 0 expected\r\n", is_device_connected);
+
+        if ( (fifo_status & (1 << TX_EMPTY)) && !is_device_connected) {
+            printf("Write with no ACK\r\n");
+            rf24_empty_tx_buffer(rf);
+            rf24_reset(rf, FIFO_STATUS);
+        }
+        else {
+            printf("[ERR] TX not empty (Buffer may not send?)!!\r\n");
+            goto fail;
         }
     }
+    else {
+        printf("Write with ACK\r\n");
+    }
 
-    rf24_clear_irq(rf);
-    rf24_empty_tx_buffer(rf);
     if (state == true) {
-        rf24_ce_pin(rf, BIT_ENABLE);
+        rf24_ce_pin(rf, ENABLE);
     }
-
+    return 1;
+fail:
+    if (state == true) {
+        rf24_ce_pin(rf, ENABLE);
+    }
     return 0;
 }
 
@@ -354,20 +355,24 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 
     uint8_t config = 0;
     rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
-    printf("Baudrate set RF_CH info: %02x\r\n", config);
+    printf("Baudrate set RF_SETUP info: %02x\r\n", config);
 
-    if ( (baudrate & 0x01) != 0 ) {
-        config |= (1<<RF_DR_HIGH);
-    }
-    else {
+    switch (baudrate)
+    {
+    case BAUD_1MBPS:
         config &= ~(1<<RF_DR_HIGH);
-    }
-
-    if ( (baudrate & 0x02) != 0 ) {
-        config |= (1<<RF_DR_LOW);
-    }
-    else {
         config &= ~(1<<RF_DR_LOW);
+        break;
+    case BAUD_2MBPS:
+        config |= (1<<RF_DR_HIGH);
+        config &= ~(1<<RF_DR_LOW);
+        break;
+    case BAUD_250KB:
+        config &= ~(1<<RF_DR_HIGH);
+        config |= (1<<RF_DR_LOW);
+        break;
+    default:
+        break;
     }
 
     printf("Baudrate set RF_SETUP info: %02x\r\n", config);
@@ -526,19 +531,29 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
     }
     
     uint8_t config = 0;
+    uint8_t feature = 0;
+    //clear feature before set
+    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
+
+    if (rf->dynamic_pay_load) {
+        feature |= (1 << EN_DPL);
+    }
 
     if (type)
     {
         config = 0x3F; //enable all pipe
         rf->is_auto_ack = true;
+        feature = feature | (1 << EN_ACK_PAY);
     }
     else
     {
         config = 0x00; //disable all pipe
-        rf->is_auto_ack = false;   
+        rf->is_auto_ack = false;
+        feature = feature | (1 << EN_DYN_ACK);
     }
-
+    printf("Feature data: %02X\r\n", feature);
     rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
+    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
 
     if (state == true) {
         rf24_ce_pin(rf, BIT_ENABLE);
@@ -557,7 +572,7 @@ void rf24_autoAck_config(RF24_Handle *rf)
     
     uint8_t config = 0;
     config |= (RE_ACK_TIME / 250 - 1) << 4 | (RE_ACK_COUNT << 0);
-    rf24_write_reg(rf, SET_AUTO_RETRS, &config, ONE_BYTE);
+    rf24_write_reg(rf, SETUP_RETR, &config, ONE_BYTE);
 
     if (state == true) {
         rf24_ce_pin(rf, BIT_ENABLE);
@@ -598,9 +613,6 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
         
     //reset status register
     rf24_reset(rf, STATUS_REG);
-    
-    //write channel on receive mode
-    rf24_channel_set(rf, rf->channel);
 
     //enable address pipe
     rf24_pipeData_rx_open(rf, pipeNum, addressRX);
@@ -622,17 +634,18 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
  * @brief Configuration mode TX on RF24
  * @def reverse with rx mode
  */
-void rf24_tx_mode(RF24_Handle *rf)
+void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
 {
+    bool last_state = false;
     rf->is_tx_mode = true;
+    memcpy(rf->tx_addr, tx_address, MAX_ADDRESS);
 
     //disable before config
     if (rf->cfg.ce_status == true) {
-        rf24_ce_pin(rf, BIT_DISABLE);
+        last_state = true;
+        rf24_ce_pin(rf, DISABLE);
     }
     
-    //write channel on transmit mode
-    rf24_channel_set(rf, rf->channel);
     //write tx address
     rf24_write_reg(rf, TX_ADDR, rf->tx_addr, MAX_ADDRESS);
     //write ack address (pipe0)
@@ -655,6 +668,9 @@ void rf24_tx_mode(RF24_Handle *rf)
         HAL_Delay(2);
     }
 
+    if( last_state ) {
+        rf24_ce_pin(rf, ENABLE);
+    }
     //save config for later use
     rf->cfg.rf24_config_reg = config;
 }
@@ -733,46 +749,42 @@ void rf24_empty_rx_buffer(RF24_Handle *rf)
 void rf24_init(RF24_Handle *rf)
 {
     printf("\n====  INIT RF24   ====\r\n");
-
     uint8_t reset_val = 0x00;
+    uint8_t temp_val = 0;
 
     //disable ce pin
     rf24_ce_pin(rf, BIT_DISABLE);
 
-    //power on
-    rf24_power_enable_set(rf, true);
+    //RESET ALL REG TO INITIAL
+    rf24_reset(rf, 0);
 
     //config later
     rf24_write_reg(rf, CONFIG_REG, &reset_val, ONE_BYTE);
-	 uint8_t config = 0;
-	 config |= (1 << EN_CRC);   // enable CRC
-	 config &= ~(1 << CRCO);    // CRC 8 bit (match Arduino)
-	 rf24_write_reg(rf, CONFIG_REG, &config, ONE_BYTE);
 
-    //disable rx addr
+    //no auto ack
+    rf24_autoAck_enable(rf, false);
+
+    //not enable any data pipe
     rf24_write_reg(rf, EN_RX_ADDR, &reset_val, ONE_BYTE);
-    
+
     //address width reset to user specific
-    uint8_t aw_val = MAX_ADDRESS - ADDR_WD_OFFSET;
-    rf24_write_reg(rf, ADDR_WID, &aw_val, ONE_BYTE);
+    temp_val = 0x03; //5 bytes address
+    rf24_write_reg(rf, ADDR_WID, &temp_val, ONE_BYTE);
+
+    //no retransmission
+    rf24_write_reg(rf, SETUP_RETR, &reset_val, ONE_BYTE);
     
     //channel reset to 0
     rf24_channel_set(rf, reset_val);
     
     //data rate and power reset to default (2MBps, 0dBm)
-    uint8_t rf_setup_val = 0x0E; //0000 1110
-    rf24_write_reg(rf, RF_SETUP, &rf_setup_val, ONE_BYTE);
+    temp_val = 0x0E; //0000 1110
+    rf24_write_reg(rf, RF_SETUP, &temp_val, ONE_BYTE);
 
-    //flush buffer (clear buffer)
-    rf24_empty_rx_buffer(rf);
-    rf24_empty_tx_buffer(rf);
-
-    rf24_autoAck_enable(rf, true);
-    if (rf->is_auto_ack) {
-        // set auto ack configuration
-        rf24_autoAck_config(rf);
-    }
-
+    //power on
+    rf24_power_enable_set(rf, true);
+    
+    rf24_ce_pin(rf, ENABLE);
     printf("====  END INIT RF24   ====\r\n");
 }
 
@@ -784,7 +796,7 @@ void rf24_reset(RF24_Handle *rf, uint8_t reg)
 {
     if (reg == STATUS_REG) {
     	uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
-    	rf24_write_reg(rf, STATUS_REG, &clr, 1);
+    	rf24_write_reg(rf, STATUS_REG, &clr, ONE_BYTE);
     }
     else if (reg == FIFO_STATUS) {
         uint8_t reset_val = 0x11;
@@ -796,10 +808,11 @@ void rf24_reset(RF24_Handle *rf, uint8_t reg)
         rf24_write_reg(rf, EN_AA,         &(uint8_t){0x3F}, ONE_BYTE);
         rf24_write_reg(rf, EN_RX_ADDR,    &(uint8_t){0x03}, ONE_BYTE);
         rf24_write_reg(rf, ADDR_WID,      &(uint8_t){0x03}, ONE_BYTE);
-        rf24_write_reg(rf, SET_AUTO_RETRS,&(uint8_t){0x03}, ONE_BYTE);
+        rf24_write_reg(rf, SETUP_RETR,	  &(uint8_t){0x03}, ONE_BYTE);
         rf24_write_reg(rf, RF_CH,         &(uint8_t){0x02}, ONE_BYTE);
         rf24_write_reg(rf, RF_SETUP,      &(uint8_t){0x0E}, ONE_BYTE);
-        rf24_write_reg(rf, STATUS_REG,    &(uint8_t){0x00}, ONE_BYTE);
+        uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
+        rf24_write_reg(rf, STATUS_REG, &clr, ONE_BYTE);
         rf24_write_reg(rf, OBSERVE_TX,    &(uint8_t){0x00}, ONE_BYTE);
         rf24_write_reg(rf, RPD,           &(uint8_t){0x00}, ONE_BYTE);
 
@@ -906,6 +919,100 @@ void print_state_init(RF24_Handle *rf, uint8_t pipeNum)
     rf24_read_reg(rf, pipeChose, buff, MAX_ADDRESS);
     for (int i = 0; i <  MAX_ADDRESS; i++)
         printf("Value: %02X\r\n", buff[i]);
+}
+
+void rf24_dump_registers(RF24_Handle *rf)
+{
+    uint8_t v;
+    uint8_t buf[5];
+
+    printf("\r\n========== nRF24L01 REGISTER DUMP ==========\r\n");
+
+    rf24_read_reg(rf, CONFIG_REG, &v, 1);
+    printf("CONFIG        : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, EN_AA, &v, 1);
+    printf("EN_AA         : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, EN_RX_ADDR, &v, 1);
+    printf("EN_RX_ADDR    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, ADDR_WID, &v, 1);
+    printf("SETUP_AW      : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, SETUP_RETR, &v, 1);
+    printf("SETUP_RETR    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RF_CH, &v, 1);
+    printf("RF_CH         : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RF_SETUP, &v, 1);
+    printf("RF_SETUP      : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, STATUS_REG, &v, 1);
+    printf("STATUS        : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, OBSERVE_TX, &v, 1);
+    printf("OBSERVE_TX    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RPD, &v, 1);
+    printf("RPD           : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RX_PIPE_ADDR_0, buf, 5);
+    printf("RX_ADDR_P0    : ");
+    for (int i = 0; i < 5; i++) printf("%02X ", buf[i]);
+    printf("\r\n");
+
+    rf24_read_reg(rf, RX_PIPE_ADDR_1, buf, 5);
+    printf("RX_ADDR_P1    : ");
+    for (int i = 0; i < 5; i++) printf("%02X ", buf[i]);
+    printf("\r\n");
+
+    rf24_read_reg(rf, RX_PIPE_ADDR_2, &v, 1);
+    printf("RX_ADDR_P2    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RX_PIPE_ADDR_3, &v, 1);
+    printf("RX_ADDR_P3    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RX_PIPE_ADDR_4, &v, 1);
+    printf("RX_ADDR_P4    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, RX_PIPE_ADDR_5, &v, 1);
+    printf("RX_ADDR_P5    : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, TX_ADDR, buf, 5);
+    printf("TX_ADDR       : ");
+    for (int i = 0; i < 5; i++) printf("%02X ", buf[i]);
+    printf("\r\n");
+
+    rf24_read_reg(rf, RX_PW_P0, &v, 1);
+    printf("RX_PW_P0      : %d\r\n", v);
+
+    rf24_read_reg(rf, RX_PW_P1, &v, 1);
+    printf("RX_PW_P1      : %d\r\n", v);
+
+    rf24_read_reg(rf, RX_PW_P2, &v, 1);
+    printf("RX_PW_P2      : %d\r\n", v);
+
+    rf24_read_reg(rf, RX_PW_P3, &v, 1);
+    printf("RX_PW_P3      : %d\r\n", v);
+
+    rf24_read_reg(rf, RX_PW_P4, &v, 1);
+    printf("RX_PW_P4      : %d\r\n", v);
+
+    rf24_read_reg(rf, RX_PW_P5, &v, 1);
+    printf("RX_PW_P5      : %d\r\n", v);
+
+    rf24_read_reg(rf, FIFO_STATUS, &v, 1);
+    printf("FIFO_STATUS   : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, DYNPD, &v, 1);
+    printf("DYNPD         : 0x%02X\r\n", v);
+
+    rf24_read_reg(rf, FEATURE, &v, 1);
+    printf("FEATURE       : 0x%02X\r\n", v);
+
+    printf("===========================================\r\n");
 }
 
 void print_reg(const char *name, uint8_t value)
