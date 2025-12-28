@@ -35,11 +35,15 @@ static inline void rf24_clear_irq(RF24_Handle *rf)
     uint8_t clr =(1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT);
     rf24_write_reg(rf, STATUS_REG, &clr, ONE_BYTE);
 
-    if (state == true) {
+    if (state == true) {    
         rf24_ce_pin(rf, ENABLE);
     }
 }
-
+static void software_reset(void)
+{
+    __disable_irq();        // optional nhưng nên có
+    NVIC_SystemReset();     // reset toàn bộ hệ thống
+}
 /**
  * =============================================================================
  * MAIN FUNCTION
@@ -184,6 +188,7 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
                 rf24_empty_tx_buffer(rf);
                 rf24_reset(rf, FIFO_STATUS);
                 rf24_clear_irq(rf);
+                software_reset();
                 tx_count_times = 0;
                 goto fail;
             }

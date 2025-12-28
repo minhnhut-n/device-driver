@@ -126,7 +126,7 @@ int main(void)
 
   printf("Begin user config\r\n");
 
-  rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
+  rf24_baudrate_set(&rf_handle, BAUD_250KB);
   rf24_crc_setting(&rf_handle, true, RF24_CRC_16); //2 byte crc
   rf24_channel_set(&rf_handle, 12);
   rf24_tx_mode(&rf_handle, tx_address);
@@ -143,7 +143,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if (rf24_write_data(&rf_handle, tx_data, strlen(tx_data)) != 0)
+	  if (rf24_write_data(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0])) != 0)
 	  {
 		  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 	  }
