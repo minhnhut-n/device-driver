@@ -73,7 +73,7 @@ int _write(int file, char *ptr, int len)
 
 RF24_Handle rf_handle;
 const uint8_t tx_address[5] = {0x00, 0x00, 0x00, 0x00, 0x02};
-char tx_data[10] = "NhutNguyen";
+uint8_t tx_data[] = "NhutNguyen";
 
 /* USER CODE END 0 */
 
@@ -143,7 +143,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if (rf24_write_data(&rf_handle, (uint8_t*)tx_data, strlen(tx_data)) != 0)
+	  if (rf24_write_data(&rf_handle, tx_data, strlen(tx_data)) != 0)
 	  {
 		  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 	  }
@@ -292,7 +292,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, CE_Pin|D_P1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : I_LED_Pin */
   GPIO_InitStruct.Pin = I_LED_Pin;
@@ -308,12 +308,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : CE_Pin */
-  GPIO_InitStruct.Pin = CE_Pin;
+  /*Configure GPIO pins : CE_Pin D_P1_Pin */
+  GPIO_InitStruct.Pin = CE_Pin|D_P1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CE_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : A_X1_Pin A_Y1_Pin */
+  GPIO_InitStruct.Pin = A_X1_Pin|A_Y1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
