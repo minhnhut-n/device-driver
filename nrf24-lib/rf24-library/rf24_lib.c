@@ -573,10 +573,8 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
         rf24_ce_pin(rf, DISABLE);
     }
     
-    uint8_t config = 0;
-    uint8_t feature = 0;
-    //clear feature before set
-    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
+    uint8_t config_aa = 0x00;
+    uint8_t feature = 0x00;
 
     if (rf->dynamic_pay_load) {
         feature |= (1 << EN_DPL);
@@ -584,18 +582,18 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
 
     if (type)
     {
-        config = 0x3F; //enable all pipe
+        config_aa = 0x3F; //enable all pipe
         rf->is_auto_ack = true;
         feature = feature | (1 << EN_ACK_PAY);
     }
     else
     {
-        config = 0x00; //disable all pipe
+        config_aa = 0x00; //disable all pipe
         rf->is_auto_ack = false;
         feature = feature | (1 << EN_DYN_ACK);
     }
     printf("Feature data: %02X\r\n", feature);
-    rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
+    rf24_write_reg(rf, EN_AA, &config_aa, ONE_BYTE);
     rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
 
     if (state == true) {
