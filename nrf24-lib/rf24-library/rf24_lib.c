@@ -825,10 +825,8 @@ void rf24_init(RF24_Handle *rf)
     
 
     //debug: enable rx_pipe_0 address
-
     rf24_empty_rx_buffer(rf);
     rf24_empty_tx_buffer(rf);
-
 
     rf24_ce_pin(rf, ENABLE);
     printf("====  END INIT RF24   ====\r\n");
