@@ -127,10 +127,8 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         size = minValue(size, ONE_SECTION_BUF);
     	memcpy(payloadTX, buffer, size);
     } else {
+        memset(payloadTX, ' ', ONE_SECTION_BUF);
     	memcpy(payloadTX, buffer, size);
-    	for (uint8_t index = size; index < ONE_SECTION_BUF; index++) {
-    		payloadTX[index] = 0;
-    	}
         size = ONE_SECTION_BUF;
     }
 
@@ -147,9 +145,9 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     //Transmission set
     spi_beginTransaction(rf);
     uint8_t cmd = W_PAY_LOAD;
-    if (! rf->is_auto_ack) {
-        cmd = W_NO_ACK_PAYLD;
-    }
+//    if (! rf->is_auto_ack) {
+//        cmd = W_NO_ACK_PAYLD;
+//    }
 
     if (HAL_SPI_Transmit(rf->cfg.hspi, &cmd, ONE_BYTE, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
@@ -586,13 +584,13 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
     {
         config = 0x3F; //enable all pipe
         rf->is_auto_ack = true;
-        feature = feature | (1 << EN_ACK_PAY);
+        feature |= (1 << EN_ACK_PAY);
     }
     else
     {
         config = 0x00; //disable all pipe
         rf->is_auto_ack = false;
-        feature = feature | (1 << EN_DYN_ACK);
+        feature |= (1 << EN_DYN_ACK);
     }
     printf("Feature data: %02X\r\n", feature);
     rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
@@ -827,6 +825,13 @@ void rf24_init(RF24_Handle *rf)
     //power on
     rf24_power_enable_set(rf, true);
     
+
+    //debug: enable rx_pipe_0 address
+
+    rf24_empty_rx_buffer(rf);
+    rf24_empty_tx_buffer(rf);
+
+
     rf24_ce_pin(rf, ENABLE);
     printf("====  END INIT RF24   ====\r\n");
 }
