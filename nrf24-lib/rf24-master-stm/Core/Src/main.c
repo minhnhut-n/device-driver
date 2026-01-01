@@ -125,20 +125,17 @@ int main(void)
   rf_handle.cfg.csnPort = CS_GPIO_Port;
   rf_handle.cfg.hspi = &hspi2;
   rf_handle.dynamic_pay_load = false;
-  rf_handle.is_auto_ack = false;
 
   //========END CONFIGURATION==========
-  rf24_dump_registers(&rf_handle);
   rf24_init(&rf_handle);
-  rf24_dump_registers(&rf_handle);
 
   printf("Begin user config\r\n");
 
+  rf24_autoAck_enable(&rf_handle, false);
   rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
-  rf24_crc_setting(&rf_handle, true, RF24_CRC_16); //2 byte crc
   rf24_channel_set(&rf_handle, 12);
+  rf24_PA_set(&rf_handle, RF24_PA_MAX);
   rf24_tx_mode(&rf_handle, tx_address);
-  rf24_PA_set(&rf_handle, RF24_PA_MIN);
 
   rf24_dump_registers(&rf_handle);
 

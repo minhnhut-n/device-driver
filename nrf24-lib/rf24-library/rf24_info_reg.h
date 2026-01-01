@@ -118,6 +118,8 @@
 #define RX_PIPE_NULL_0	0
 #define ONE_BYTE        1
 #define ADDR_WD_OFFSET  2
+#define V_TX_DS         32
+#define V_MAX_RT        16
 #define SPI_TIMEOUT     100
 
 #define PIPE0 0

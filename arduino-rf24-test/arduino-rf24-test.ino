@@ -14,9 +14,10 @@ void setup() {
   // ===== NO ACK CONFIG =====
   radio.setAutoAck(false);          // ❌ Auto ACK OFF
   radio.disableDynamicPayloads();   // ❌ Fixed payload
+  radio.setCRCLength(RF24_CRC_16);
   radio.setPayloadSize(32);
 
-  radio.setChannel(0x0C);
+  radio.setChannel(12);
   radio.setDataRate(RF24_1MBPS);
   radio.setPALevel(RF24_PA_MAX);
 
