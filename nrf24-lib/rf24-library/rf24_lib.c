@@ -289,7 +289,7 @@ bool isValid_AddrWidth(RF24_Handle *rf)
     }
     
     uint8_t rtn = 0;
-    rf24_read_reg(rf, ADDR_WID, &rtn, ONE_BYTE);
+    rf24_read_reg(rf, SETUP_AW, &rtn, ONE_BYTE);
 
     rtn += ADDR_WD_OFFSET;
     if (rtn > 2 && rtn < 6) {
@@ -533,9 +533,9 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addr
     printf("Set payload size for PIPE %d: %d bytes\r\n", pipeNum, value);
     rf24_write_reg(rf, pw_reg, &value, ONE_BYTE);
 
-    rf24_read_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    rf24_read_reg(rf, EN_RXADDR, &value, ONE_BYTE);
     value |= (ENABLE << pipeNum);
-    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    rf24_write_reg(rf, EN_RXADDR, &value, ONE_BYTE);
 
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);
@@ -553,9 +553,9 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
     }
     
     uint8_t value = 0;
-    rf24_read_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    rf24_read_reg(rf, EN_RXADDR, &value, ONE_BYTE);
     value &= ~(ENABLE << pipeNum);
-    rf24_write_reg(rf, EN_RX_ADDR, &value, ONE_BYTE);
+    rf24_write_reg(rf, EN_RXADDR, &value, ONE_BYTE);
 
     if (pipeNum == 0) {
         // keep track of pipe 0's RX state to avoid null vs 0 in addr cache
@@ -808,11 +808,11 @@ void rf24_init(RF24_Handle *rf)
     rf24_autoAck_enable(rf, false);
 
     //not enable any data pipe
-    rf24_write_reg(rf, EN_RX_ADDR, &reset_val, ONE_BYTE);
+    rf24_write_reg(rf, EN_RXADDR, &reset_val, ONE_BYTE);
 
     //address width reset to user specific
     temp_val = 0x03; //5 bytes address
-    rf24_write_reg(rf, ADDR_WID, &temp_val, ONE_BYTE);
+    rf24_write_reg(rf, SETUP_AW, &temp_val, ONE_BYTE);
 
     //no retransmission
     rf24_write_reg(rf, SETUP_RETR, &reset_val, ONE_BYTE);
@@ -854,8 +854,8 @@ void rf24_reset(RF24_Handle *rf, uint8_t reg)
         printf("rf24_reset: others register reset\r\n");
         rf24_write_reg(rf, CONFIG_REG,    &(uint8_t){0x08}, ONE_BYTE);
         rf24_write_reg(rf, EN_AA,         &(uint8_t){0x3F}, ONE_BYTE);
-        rf24_write_reg(rf, EN_RX_ADDR,    &(uint8_t){0x03}, ONE_BYTE);
-        rf24_write_reg(rf, ADDR_WID,      &(uint8_t){0x03}, ONE_BYTE);
+        rf24_write_reg(rf, EN_RXADDR,    &(uint8_t){0x03}, ONE_BYTE);
+        rf24_write_reg(rf, SETUP_AW,      &(uint8_t){0x03}, ONE_BYTE);
         rf24_write_reg(rf, SETUP_RETR,	  &(uint8_t){0x03}, ONE_BYTE);
         rf24_write_reg(rf, RF_CH,         &(uint8_t){0x02}, ONE_BYTE);
         rf24_write_reg(rf, RF_SETUP,      &(uint8_t){0x0E}, ONE_BYTE);
@@ -913,7 +913,7 @@ void print_tc_function(RF24_Handle *rf, uint8_t pipeNum) {
 
     printf("==>> Address config <<==\r\n");
     check = 0;
-    rf24_read_reg(rf, ADDR_WID, &check, ONE_BYTE);
+    rf24_read_reg(rf, SETUP_AW, &check, ONE_BYTE);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Channel config <<==\r\n");
@@ -948,7 +948,7 @@ void print_state_init(RF24_Handle *rf, uint8_t pipeNum)
 
     printf("==>> Address config <<==\r\n");
     check = 0;
-    rf24_read_reg(rf, ADDR_WID, &check, ONE_BYTE);
+    rf24_read_reg(rf, SETUP_AW, &check, ONE_BYTE);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Channel config <<==\r\n");
@@ -982,10 +982,10 @@ void rf24_dump_registers(RF24_Handle *rf)
     rf24_read_reg(rf, EN_AA, &v, 1);
     printf("EN_AA         : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, EN_RX_ADDR, &v, 1);
+    rf24_read_reg(rf, EN_RXADDR, &v, 1);
     printf("EN_RX_ADDR    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, ADDR_WID, &v, 1);
+    rf24_read_reg(rf, SETUP_AW, &v, 1);
     printf("SETUP_AW      : 0x%02X\r\n", v);
 
     rf24_read_reg(rf, SETUP_RETR, &v, 1);
