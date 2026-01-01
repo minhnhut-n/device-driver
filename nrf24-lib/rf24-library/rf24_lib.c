@@ -132,6 +132,10 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         size = ONE_SECTION_BUF;
     }
 
+    for (uint8_t i=0; i< ONE_SECTION_BUF; i++)
+    	printf("%d ", payloadTX[i]);
+    printf("\r\n");
+
     //transmission
     bool state = rf->cfg.ce_status;
     if (rf->cfg.ce_status == true) {
@@ -145,9 +149,9 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     //Transmission set
     spi_beginTransaction(rf);
     uint8_t cmd = W_PAY_LOAD;
-//    if (! rf->is_auto_ack) {
-//        cmd = W_NO_ACK_PAYLD;
-//    }
+    if (! rf->is_auto_ack) {
+        cmd = W_NO_ACK_PAYLD;
+    }
 
     if (HAL_SPI_Transmit(rf->cfg.hspi, &cmd, ONE_BYTE, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
@@ -303,7 +307,7 @@ bool isValid_AddrWidth(RF24_Handle *rf)
 /**
  * @brief Power consumption for rf24
  */
-void rf24_powerConsumption_set(RF24_Handle *rf)
+void rf24_PA_set(RF24_Handle *rf, uint8_t level)
 {
     bool state = rf->cfg.ce_status;
     if (rf->cfg.ce_status == true) {
@@ -312,13 +316,13 @@ void rf24_powerConsumption_set(RF24_Handle *rf)
 
     uint8_t config = 0;
     rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
-    printf("power consumtion RF_SETUP info: %02x\r\n", config);
+    printf("PA setup RF_SETUP info: %02x\r\n", config);
 
     config &= ~((1<<1) | (1<<2));
-    config |= ((rf->power_amplifier&0x03) << 1);
+    config |= ((level&0x03) << 1);
 
     rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
-    printf("power consumtion RF_SETUP after info: %02x\r\n", config);
+    printf("PA setup RF_SETUP after info: %02x\r\n", config);
 
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);

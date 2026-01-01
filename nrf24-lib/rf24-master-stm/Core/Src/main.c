@@ -138,6 +138,8 @@ int main(void)
   rf24_crc_setting(&rf_handle, true, RF24_CRC_16); //2 byte crc
   rf24_channel_set(&rf_handle, 12);
   rf24_tx_mode(&rf_handle, tx_address);
+  rf24_PA_set(&rf_handle, RF24_PA_MIN);
+
   rf24_dump_registers(&rf_handle);
 
   printf("READY!!\r\n");
@@ -163,13 +165,6 @@ int main(void)
     }
 
      HAL_Delay(500);
-
-    // bool status = HAL_GPIO_ReadPin(D_P1_GPIO_Port, D_P1_Pin);
-    // if (status) {
-    //   HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
-    // }
-
-
   }
   /* USER CODE END 3 */
 }
