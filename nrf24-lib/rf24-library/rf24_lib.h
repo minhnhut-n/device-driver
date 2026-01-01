@@ -200,7 +200,7 @@ void rf24_power_enable_set(RF24_Handle *rf, uint8_t status);
 /**
  * @brief Power consumption for rf24
  */
-void rf24_powerConsumption_set(RF24_Handle *rf);
+void rf24_PA_set(RF24_Handle *rf, uint8_t level);
 /**
  * @brief Channel set for rf24
  */

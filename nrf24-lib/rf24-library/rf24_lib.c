@@ -17,7 +17,7 @@
 
 static const uint8_t pipeAddr[6] = {RX_PIPE_ADDR_0, RX_PIPE_ADDR_1, RX_PIPE_ADDR_2,
                                     RX_PIPE_ADDR_3, RX_PIPE_ADDR_4, RX_PIPE_ADDR_5};
-
+static uint8_t tx_count_times = 0;
 /**
  * Static function
  * This function will be use only on internal of this file,
@@ -35,11 +35,15 @@ static inline void rf24_clear_irq(RF24_Handle *rf)
     uint8_t clr =(1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT);
     rf24_write_reg(rf, STATUS_REG, &clr, ONE_BYTE);
 
-    if (state == true) {
+    if (state == true) {    
         rf24_ce_pin(rf, ENABLE);
     }
 }
-
+static void software_reset(void)
+{
+    __disable_irq();        // optional nhưng nên có
+    NVIC_SystemReset();     // reset toàn bộ hệ thống
+}
 /**
  * =============================================================================
  * MAIN FUNCTION
@@ -106,8 +110,8 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
  */
 uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 {
-    if (buffer == NULL) {
-        printf("rf24_write_data: buffer is NULL -> abort\r\n");
+    if (buffer == NULL || size <= 0) {
+        printf("[ERR] Return before write!!\r\n");
         return 0;
     }
     uint8_t status = 0;
@@ -117,18 +121,20 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 	uint8_t payloadTX[ONE_SECTION_BUF] = {0};
     if (rf->dynamic_pay_load) {
         if (rf->payload_size == 0) {
-            printf("rf24_write_data: payload_size == 0 (not initialized)\r\n");
+            printf("[ERR] Wrong payload size setting!!\r\n");
             return 0;
         }
         size = minValue(size, ONE_SECTION_BUF);
     	memcpy(payloadTX, buffer, size);
     } else {
+        memset(payloadTX, ' ', ONE_SECTION_BUF);
     	memcpy(payloadTX, buffer, size);
-    	for (uint8_t index = size; index < ONE_SECTION_BUF; index++) {
-    		payloadTX[index] = 'x';
-    	}
         size = ONE_SECTION_BUF;
     }
+
+    for (uint8_t i=0; i< ONE_SECTION_BUF; i++)
+    	printf("%d ", payloadTX[i]);
+    printf("\r\n");
 
     //transmission
     bool state = rf->cfg.ce_status;
@@ -138,9 +144,7 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     //clear bit IQR of TX before sending
     rf24_clear_irq(rf);
-    printf("Sending: %s\r\n", payloadTX);
     rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-    printf("TX_DS status before: %d\r\n", (status&(1<<TX_DS)));
 
     //Transmission set
     spi_beginTransaction(rf);
@@ -174,26 +178,33 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         uint8_t is_device_connected = 0;
         rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
         irq_tx_done = status&(1<<TX_DS);
-        printf("TX_DS status after: %d\r\n", irq_tx_done);
 
         if ( irq_tx_done ) {
-
             rf24_clear_irq(rf);
         }
         else {
+            tx_count_times += 1;
             printf("[ERR] Interrupt was not set!!\r\n");
+            if (tx_count_times == 5) {
+                printf("[ERR] May power lost when TX previous time! Clear TX_DS\r\n");
+                rf24_empty_tx_buffer(rf);
+                rf24_reset(rf, FIFO_STATUS);
+                rf24_clear_irq(rf);
+                software_reset();
+                tx_count_times = 0;
+                goto fail;
+            }
         }
 
         rf24_read_reg(rf, FIFO_STATUS, &fifo_status, ONE_BYTE);
         is_device_connected = ((fifo_status >> 3) & 0x01);
         printf("Device connect? (%d), 0 expected\r\n", is_device_connected);
 
-        if ( (fifo_status & (1 << TX_EMPTY)) && !is_device_connected) {
-            printf("Write with no ACK\r\n");
-            rf24_empty_tx_buffer(rf);
+        if ( ((fifo_status >> TX_EMPTY)& 0x01) && !is_device_connected) {
             rf24_reset(rf, FIFO_STATUS);
         }
         else {
+            rf24_empty_tx_buffer(rf);
             printf("[ERR] TX not empty (Buffer may not send?)!!\r\n");
             goto fail;
         }
@@ -296,7 +307,7 @@ bool isValid_AddrWidth(RF24_Handle *rf)
 /**
  * @brief Power consumption for rf24
  */
-void rf24_powerConsumption_set(RF24_Handle *rf)
+void rf24_PA_set(RF24_Handle *rf, uint8_t level)
 {
     bool state = rf->cfg.ce_status;
     if (rf->cfg.ce_status == true) {
@@ -305,13 +316,13 @@ void rf24_powerConsumption_set(RF24_Handle *rf)
 
     uint8_t config = 0;
     rf24_read_reg(rf, RF_SETUP, &config, ONE_BYTE);
-    printf("power consumtion RF_SETUP info: %02x\r\n", config);
+    printf("PA setup RF_SETUP info: %02x\r\n", config);
 
     config &= ~((1<<1) | (1<<2));
-    config |= ((rf->power_amplifier&0x03) << 1);
+    config |= ((level&0x03) << 1);
 
     rf24_write_reg(rf, RF_SETUP, &config, ONE_BYTE);
-    printf("power consumtion RF_SETUP after info: %02x\r\n", config);
+    printf("PA setup RF_SETUP after info: %02x\r\n", config);
 
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);
@@ -564,10 +575,8 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
         rf24_ce_pin(rf, DISABLE);
     }
     
-    uint8_t config = 0;
-    uint8_t feature = 0;
-    //clear feature before set
-    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
+    uint8_t config_aa = 0x00;
+    uint8_t feature = 0x00;
 
     if (rf->dynamic_pay_load) {
         feature |= (1 << EN_DPL);
@@ -575,18 +584,18 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
 
     if (type)
     {
-        config = 0x3F; //enable all pipe
+        config_aa = 0x3F; //enable all pipe
         rf->is_auto_ack = true;
-        feature = feature | (1 << EN_ACK_PAY);
+        feature |= (1 << EN_ACK_PAY);
     }
     else
     {
-        config = 0x00; //disable all pipe
+        config_aa = 0x00; //disable all pipe
         rf->is_auto_ack = false;
-        feature = feature | (1 << EN_DYN_ACK);
+        feature |= (1 << EN_DYN_ACK);
     }
     printf("Feature data: %02X\r\n", feature);
-    rf24_write_reg(rf, EN_AA, &config, ONE_BYTE);
+    rf24_write_reg(rf, EN_AA, &config_aa, ONE_BYTE);
     rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
 
     if (state == true) {
@@ -818,6 +827,11 @@ void rf24_init(RF24_Handle *rf)
     //power on
     rf24_power_enable_set(rf, true);
     
+
+    //debug: enable rx_pipe_0 address
+    rf24_empty_rx_buffer(rf);
+    rf24_empty_tx_buffer(rf);
+
     rf24_ce_pin(rf, ENABLE);
     printf("====  END INIT RF24   ====\r\n");
 }
