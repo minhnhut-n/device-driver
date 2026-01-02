@@ -6,6 +6,7 @@
  */
 
 #include "rf24_lib.h"
+#include "stm_system_config.h"
 
 /**
  * =============================================================================
@@ -38,6 +39,15 @@ static inline void rf24_clear_irq(RF24_Handle *rf)
         rf24_ce_pin(rf, ENABLE);
     }
 }
+
+static inline uint32_t convert_us_to_tick(uint32_t us) {
+    return us*(SystemCoreClock/1e6);
+}
+
+static inline uint32_t convert_tick_to_us(uint32_t tick) {
+    return tick/(SystemCoreClock/1e6);
+}
+
 static void software_reset(void)
 {
     __disable_irq();        // optional nhưng nên có
@@ -139,9 +149,9 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     //Transmission set
     spi_beginTransaction(rf);
     uint8_t cmd = W_PAY_LOAD;
-    if (! rf->is_auto_ack) {
-        cmd = W_NO_ACK_PAYLD;
-    }
+     if (! rf->is_auto_ack) {
+         cmd = W_NO_ACK_PAYLD;
+     }
 
     if (HAL_SPI_Transmit(rf->cfg.hspi, &cmd, ONE_BYTE, SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
@@ -156,28 +166,31 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     //trigger send data in TX FIFO
     rf24_ce_pin(rf, ENABLE);
+    delay_us(200);
+
+    printf("Send check...\r\n");
     /**
      * On TX without ACK, TX_DS was set immediately after the package
      * is transmitted
      */
-    printf("no auto ack \r\n");
-    uint32_t start = HAL_GetTick();
+    uint32_t start = HAL_GetTick(); //get current cycle CPU
 
-    while (1) {
+    rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
+    while ( !(status & (V_TX_DS|V_MAX_RT)) ) {
+        printf("status: %02X\r\n", status & (V_TX_DS|V_MAX_RT));
         rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-
-        if (status & V_TX_DS) {
-            break;
-        }
-
-        if (status & V_MAX_RT) {
-            rf24_empty_tx_buffer(rf);
-            goto fail;
-        }
 
         if (HAL_GetTick() - start > 95) {
             goto fail;
         }
+    }
+
+    rf24_ce_pin(rf, DISABLE);
+    rf24_clear_irq(rf);
+
+    if (status & V_MAX_RT) {
+        printf("MAX_RT was set!\r\n");
+        goto fail;
     }
 
     if (state == true) {
@@ -185,7 +198,8 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     }
     return 1;
 fail:
-    printf("fail \r\n");
+    printf("[ERR] on fail\r\n");
+    rf24_empty_tx_buffer(rf);
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);
     }
@@ -560,6 +574,7 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
     {
         config_aa = 0x00; //disable all pipe
         rf->is_auto_ack = false;
+        feature |= (1 << EN_DYN_ACK);
     }
 
     rf24_write_reg(rf, EN_AA, &config_aa, ONE_BYTE);

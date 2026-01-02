@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "rf24_lib.h"
+#include "stm_system_config.h"
 #include <string.h>
 
 #define isEmptyBuffer(buf)      ((buf) != NULL ? 0 : 1)
@@ -118,6 +119,9 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
+  //========STM_SYSTEM_CONFIG=========
+  DWT_Init();
+
   //========RF_CONFIGURATION==========
   rf_handle.cfg.cePin = CE_Pin;
   rf_handle.cfg.cePort = CE_GPIO_Port;
@@ -151,7 +155,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-
     if (rf24_write_data(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0])) != 0)
     {
       HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
@@ -161,7 +164,9 @@ int main(void)
       HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
     }
 
-     HAL_Delay(500);
+    HAL_Delay(500);
+    // HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
+    // delay_us(1e6);
   }
   /* USER CODE END 3 */
 }
