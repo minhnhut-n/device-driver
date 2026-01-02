@@ -138,7 +138,7 @@
 #define	MID_HI_POWER 2
 #define MAX_POWER 	 3
 
-#define RE_ACK_TIME  500  //microseconds
+#define RE_ACK_TIME  1500	  //microseconds
 #define RE_ACK_COUNT 5    //max re-ack count
 
 typedef enum {

@@ -14,12 +14,11 @@ void setup() {
   Serial.begin(115200);
   radio.begin();
   printf_begin();
-  radio.printPrettyDetails();
 
   // ===== NO ACK CONFIG =====
   Serial.println("===== NO ACK CONFIG =====");
-  radio.setAutoAck(false);          // ❌ Auto ACK OFF
-  radio.setRetries(0, 0);           // ❌ No retry
+  radio.setAutoAck(true);
+  radio.setRetries(5, 4);
   radio.disableDynamicPayloads();   // ❌ Fixed payload
   radio.setPayloadSize(32);
 
@@ -30,8 +29,7 @@ void setup() {
   radio.openWritingPipe(address);
   radio.stopListening();            // TX mode
 
-  radio.printDetails();
-
+  radio.printPrettyDetails();
   Serial.println("TX NO-ACK READY");
 }
 

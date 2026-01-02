@@ -44,7 +44,7 @@ typedef struct {
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
     uint8_t pipe1_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
-    bool is_enable_payload_ack;
+    bool cmd_send_data;
     bool is_tx_mode;
     bool dynamic_pay_load;
     bool is_auto_ack;
@@ -210,13 +210,13 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel);
  */
 void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate);
 /**
- * @brief Auto Acknowledgment enable for rf24
- */
-void rf24_autoAck_enable(RF24_Handle *rf, bool type);
-/**
  * @brief Auto Acknowledgment configuration for rf24
  */
-void rf24_autoAck_config(RF24_Handle *rf);
+void rf24_autoAck_enable(RF24_Handle *rf, bool type);
+void rf24_autoAck_config(RF24_Handle *rf, uint16_t ack_time, uint8_t ack_retry);
+void rf24_ack_payload(RF24_Handle *rf, bool is_ack_payload);
+void rf24_dynamic_payLoad(RF24_Handle *rf, bool type);
+void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack);
 /**
  * @brief: CRC setting for payload transmit
  */

@@ -145,13 +145,9 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     if (rf->cfg.ce_status == true) {
         rf24_ce_pin(rf, DISABLE);
     }
-
     //Transmission set
     spi_beginTransaction(rf);
-    uint8_t cmd = W_PAY_LOAD;
-     if (! rf->is_auto_ack) {
-         cmd = W_NO_ACK_PAYLD;
-     }
+    uint8_t cmd = rf->cmd_send_data;
 
     if (HAL_SPI_Transmit(rf->cfg.hspi, &cmd, ONE_BYTE, SPI_TIMEOUT) != HAL_OK) {
         printf("Error when write data %02X \r\n", cmd);
@@ -166,24 +162,25 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     //trigger send data in TX FIFO
     rf24_ce_pin(rf, ENABLE);
-    delay_us(200);
 
-    printf("Send check...\r\n");
     /**
      * On TX without ACK, TX_DS was set immediately after the package
      * is transmitted
      */
-    uint32_t start = HAL_GetTick(); //get current cycle CPU
+    uint32_t start = DWT->CYCCNT; //get current cy
+    uint32_t time = convert_us_to_tick(300);
 
     rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-    while ( !(status & (V_TX_DS|V_MAX_RT)) ) {
-        printf("status: %02X\r\n", status & (V_TX_DS|V_MAX_RT));
+    while ( !(status & (V_TX_DS | V_MAX_RT)) ) {
         rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
 
-        if (HAL_GetTick() - start > 95) {
+        if (DWT->CYCCNT - start > time) {
             goto fail;
         }
     }
+    
+    time = convert_tick_to_us(DWT->CYCCNT - start);
+    printf("[INFO] Success sending with time: %ld!!\r\n", time);
 
     rf24_ce_pin(rf, DISABLE);
     rf24_clear_irq(rf);
@@ -198,7 +195,9 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     }
     return 1;
 fail:
-    printf("[ERR] on fail\r\n");
+    printf("[ERR] FAIL TO SEND DATA!!\r\n");
+    printf("[INFO] status: %02X\r\n", status);
+    rf24_clear_irq(rf);
     rf24_empty_tx_buffer(rf);
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);
@@ -549,7 +548,9 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
         rf24_ce_pin(rf, ENABLE);
     }
 }
-
+/**
+ * @brief auto-ack setting
+ */
 void rf24_autoAck_enable(RF24_Handle *rf, bool type)
 {
     bool state = rf->cfg.ce_status;
@@ -558,27 +559,18 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
     }
     
     uint8_t config_aa = 0x00;
-    uint8_t feature = 0x00;
-
-    if (rf->dynamic_pay_load) {
-        feature |= (1 << EN_DPL);
-    }
 
     if (type)
     {
         config_aa = 0x3F; //enable all pipe
         rf->is_auto_ack = true;
-        feature |= (1 << EN_ACK_PAY);
     }
     else
     {
         config_aa = 0x00; //disable all pipe
         rf->is_auto_ack = false;
-        feature |= (1 << EN_DYN_ACK);
     }
-
     rf24_write_reg(rf, EN_AA, &config_aa, ONE_BYTE);
-    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
 
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);
@@ -588,16 +580,93 @@ void rf24_autoAck_enable(RF24_Handle *rf, bool type)
 /**
  * @brief Auto Acknowledgment configuration for rf24
  */
-void rf24_autoAck_config(RF24_Handle *rf)
+void rf24_autoAck_config(RF24_Handle *rf, uint16_t ack_time, uint8_t ack_retry)
 {
     bool state = rf->cfg.ce_status;
     if (rf->cfg.ce_status == true) {
         rf24_ce_pin(rf, DISABLE);
     }
     
-    uint8_t config = 0;
-    config |= (RE_ACK_TIME / 250 - 1) << 4 | (RE_ACK_COUNT << 0);
+    if (ack_time < 250) {
+        printf("rate is not valid, set to default\r\n");
+        ack_time = 250;
+    }
+
+    uint8_t config = 0x00;  
+    config |= ((uint8_t)(ack_time / 250) - 1) << 4 | (ack_retry << 0);
     rf24_write_reg(rf, SETUP_RETR, &config, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, ENABLE);
+    }
+}
+
+void rf24_ack_payload(RF24_Handle *rf, bool is_ack_payload) {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, DISABLE);
+    }
+
+    uint8_t feature = 0x00;
+    rf24_read_reg(rf, FEATURE, &feature, ONE_BYTE);
+
+    if (is_ack_payload) {
+        feature |= (1 << EN_ACK_PAY);
+    }
+    else {
+        feature &= ~(1 << EN_ACK_PAY);
+    }
+
+    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, ENABLE);
+    }
+}
+
+void rf24_dynamic_payLoad(RF24_Handle *rf, bool type) {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, DISABLE);
+    }
+
+    uint8_t feature = 0x00;
+    rf24_read_reg(rf, FEATURE, &feature, ONE_BYTE);
+
+    if (type) {
+        feature |= (1 << EN_DPL);
+        rf->dynamic_pay_load = true;
+    } else {
+        feature &= ~(1 << EN_DPL);
+        rf->dynamic_pay_load = false;
+    }
+
+    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
+
+    if (state == true) {
+        rf24_ce_pin(rf, ENABLE);
+    }
+}
+
+void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack) {
+    bool state = rf->cfg.ce_status;
+    if (rf->cfg.ce_status == true) {
+        rf24_ce_pin(rf, DISABLE);
+    }
+
+    uint8_t feature = 0x00;
+    rf24_read_reg(rf, FEATURE, &feature, ONE_BYTE);
+
+    if (write_with_ack) {
+        rf->cmd_send_data = W_PAY_LOAD;
+        feature &= ~(1 << EN_DYN_ACK);
+    }
+    else {
+        rf->cmd_send_data = W_NO_ACK_PAYLD;
+        feature |= (1 << EN_DYN_ACK);
+    }
+
+    rf24_write_reg(rf, FEATURE, &feature, ONE_BYTE);
 
     if (state == true) {
         rf24_ce_pin(rf, ENABLE);
@@ -788,6 +857,11 @@ void rf24_init(RF24_Handle *rf)
 
     //no auto ack
     rf24_autoAck_enable(rf, false);
+    
+    //write data with normal command
+    rf24_ack_payload(rf, false);
+    rf24_dynamic_payLoad(rf, false);
+    rf24_cmd_on_write(rf, true);
 
     //enable only pipe 0 and pipe 1
     uint8_t rx_addr_rest_val = 0x03;
