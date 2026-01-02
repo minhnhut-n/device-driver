@@ -156,34 +156,28 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     //trigger send data in TX FIFO
     rf24_ce_pin(rf, ENABLE);
+    /**
+     * On TX without ACK, TX_DS was set immediately after the package
+     * is transmitted
+     */
+    printf("no auto ack \r\n");
+    uint32_t start = HAL_GetTick();
 
-    if (!rf->is_auto_ack) {
-        /**
-         * On TX without ACK, TX_DS was set immediately after the package
-         * is transmitted
-         */
-        printf("no auto ack \r\n");
-uint32_t start = HAL_GetTick();
+    while (1) {
+        rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
 
-while (1) {
-    rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);  // ✅ ĐỌC LẠI MỖI VÒNG
+        if (status & V_TX_DS) {
+            break;
+        }
 
-    if (status & V_TX_DS) {
-        break;                                        // ✅ TX DONE
-    }
+        if (status & V_MAX_RT) {
+            rf24_empty_tx_buffer(rf);
+            goto fail;
+        }
 
-    if (status & V_MAX_RT) {
-        rf24_empty_tx_buffer(rf);
-        goto fail;
-    }
-
-    if (HAL_GetTick() - start > 95) {
-        goto fail;
-    }
-}
-    }
-    else {
-        printf("Write with ACK\r\n");
+        if (HAL_GetTick() - start > 95) {
+            goto fail;
+        }
     }
 
     if (state == true) {
