@@ -2,67 +2,44 @@
 #include <RF24.h>
 #include "printf.h"
 
-
 // CE, CSN
 RF24 radio(9, 10);
 
-// MUST MATCH RX
+// 5-byte address
 const byte address[5] = {'N','H','U','T','1'};
 
-uint8_t txBuffer[32];
-uint8_t counter = 0;
-
-void dumpRF24Registers()
-{
-  Serial.println(F("===== RF24 REGISTER DUMP ====="));
-  radio.printDetails();
-  Serial.println(F("===== END DUMP ====="));
-}
+char txPayload[32] = "HELLO_NO_ACK_FROM_TX";
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial);
-
-  if (!radio.begin()) {
-    Serial.println("RF24 not responding");
-    while (1);
-  }
-
+  radio.begin();
   printf_begin();
+  radio.printPrettyDetails();
 
-  // ===== RF CONFIG =====
-  radio.setChannel(12);
-  radio.setDataRate(RF24_1MBPS);
-  radio.setPALevel(RF24_PA_MIN);
-
-  radio.setAutoAck(true);      // ENABLE Auto ACK
-  radio.setRetries(5, 15);     // Retry for ACK
-  radio.disableDynamicPayloads();
+  // ===== NO ACK CONFIG =====
+  Serial.println("===== NO ACK CONFIG =====");
+  radio.setAutoAck(false);          // ❌ Auto ACK OFF
+  radio.setRetries(0, 0);           // ❌ No retry
+  radio.disableDynamicPayloads();   // ❌ Fixed payload
   radio.setPayloadSize(32);
-  radio.setCRCLength(RF24_CRC_16);
+
+  radio.setChannel(0x0C);
+  radio.setDataRate(RF24_1MBPS);
+  radio.setPALevel(RF24_PA_MAX);
 
   radio.openWritingPipe(address);
-  radio.stopListening();
+  radio.stopListening();            // TX mode
 
-  dumpRF24Registers();
+  radio.printDetails();
 
-  Serial.println("TX ready (Auto ACK ON)");
+  Serial.println("TX NO-ACK READY");
 }
 
 void loop() {
-  memset(txBuffer, 0, sizeof(txBuffer));
+  bool ok = radio.write(&txPayload, 32);
 
-  // Example payload
-  txBuffer[0] = counter++;
-  txBuffer[1] = 'N';
-  txBuffer[2] = 'H';
-  txBuffer[3] = 'U';
-  txBuffer[4] = 'T';
+  Serial.print("Send status: ");
+  Serial.println(ok ? "OK" : "FAIL");
 
-  bool ok = radio.write(txBuffer, 32);
-
-  Serial.print("TX result: ");
-  Serial.println(ok ? "ACK OK" : "MAX_RT (NO ACK)");
-
-  delay(500);
+  delay(1000);
 }

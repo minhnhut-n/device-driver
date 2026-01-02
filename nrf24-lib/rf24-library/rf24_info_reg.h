@@ -38,8 +38,8 @@
  */
 #define CONFIG_REG		0x00
 #define EN_AA   		0x01
-#define EN_RX_ADDR		0x02 //for special pipe to communication
-#define ADDR_WID    	0x03
+#define EN_RXADDR		0x02 //for special pipe to communication
+#define SETUP_AW    	0x03
 #define SETUP_RETR  	0x04
 #define RF_CH			0x05
 #define RF_SETUP    	0x06
@@ -118,6 +118,8 @@
 #define RX_PIPE_NULL_0	0
 #define ONE_BYTE        1
 #define ADDR_WD_OFFSET  2
+#define V_TX_DS         32
+#define V_MAX_RT        16
 #define SPI_TIMEOUT     100
 
 #define PIPE0 0
