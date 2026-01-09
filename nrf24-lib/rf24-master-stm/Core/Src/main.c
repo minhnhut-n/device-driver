@@ -134,7 +134,7 @@ int main(void)
 
   printf("Begin user config\r\n");
 
-  rf24_autoAck_enable(&rf_handle, true);
+  rf24_autoAck_enable(&rf_handle, false);
   rf24_autoAck_config(&rf_handle, RE_ACK_TIME, RE_ACK_COUNT);
   rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
   rf24_channel_set(&rf_handle, 12);

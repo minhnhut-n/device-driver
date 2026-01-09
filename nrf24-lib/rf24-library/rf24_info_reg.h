@@ -114,10 +114,11 @@
 #define RX_MODE			1
 #define TX_MODE			0
 #define MAX_ADDRESS 	5
-#define RF_SPI_TIMEOUT	15
+#define RF_SPI_TIMEOUT	200
 #define RX_PIPE_NULL_0	0
 #define ONE_BYTE        1
 #define ADDR_WD_OFFSET  2
+#define V_RX_DR         64
 #define V_TX_DS         32
 #define V_MAX_RT        16
 #define SPI_TIMEOUT     100
@@ -138,8 +139,8 @@
 #define	MID_HI_POWER 2
 #define MAX_POWER 	 3
 
-#define RE_ACK_TIME  1500	  //microseconds
-#define RE_ACK_COUNT 5    //max re-ack count
+#define RE_ACK_TIME  0	  //microseconds
+#define RE_ACK_COUNT 0    //max re-ack count
 
 typedef enum {
     RX_PIPE_ADDR_0 =	0x0A,

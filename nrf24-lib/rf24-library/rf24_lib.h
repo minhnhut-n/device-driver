@@ -122,7 +122,12 @@ void spi_endTransaction(RF24_Handle *rf);
 /**
  * @brief function support for writing configuration wih spi
  */
-void rf24_write_reg(RF24_Handle *rf, uint8_t reg, const uint8_t *regData, uint8_t size);
+void rf24_write_reg(RF24_Handle *rf, uint8_t reg, uint8_t regData);
+/**
+ * @brief function support for writing configuration wih spi
+ */
+void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, uint8_t size);
+
 /**
  * @brief function support for reading configuration wih spi
  */

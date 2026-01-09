@@ -12,7 +12,7 @@ void setup() {
   radio.begin();
 
   // ===== NO ACK CONFIG =====
-  radio.setAutoAck(true);
+  radio.setAutoAck(false);
   radio.disableDynamicPayloads();
   radio.setCRCLength(RF24_CRC_16);
   radio.setPayloadSize(32);
