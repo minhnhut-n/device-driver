@@ -133,6 +133,11 @@ void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, ui
  */
 void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 
+
+/** 
+ * @brief frame of sending step
+ */
+uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size);
 /**
  * @brief function support for writing user data wih spi
  */
@@ -153,7 +158,7 @@ bool isValid_AddrWidth(RF24_Handle *rf);
 /**
  * @brief Power consumption for rf24
  */
-void rf24_power_set(RF24_Handle *rf);
+void rf24_sig_amp(RF24_Handle *rf);
 
 /**
  * @brief change pin CE logic and status
@@ -244,7 +249,7 @@ void rf24_init(RF24_Handle *rf);
  * @brief: reset rf24 module
  * @note:
  */
-void rf24_reset(RF24_Handle *rf, uint8_t reg);
+void rf24_reset(RF24_Handle *rf);
 
 /**
  * FOR DEBUG WITH SERIAL LOG ONLY

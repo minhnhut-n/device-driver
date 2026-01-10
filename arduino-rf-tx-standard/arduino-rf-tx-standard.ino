@@ -1,16 +1,14 @@
 #include <SPI.h>
 #include <RF24.h>
-#include "printf.h"
 
 // CE, CSN
 RF24 radio(9, 10);
 
-// 5-byte address
+// 5-byte address (TX == RX)
 const byte address[5] = {'N','H','U','T','1'};
+char txPayload[32] = "NhutNguyen0000000000000000000000";
 
-char txPayload[32] = "HELLO_NO_ACK_FROM_TX";
-
-uint8_t nrfReadReg(uint8_t reg)
+uint8_t nrf_read_reg(uint8_t reg)
 {
   digitalWrite(10, LOW);
   SPI.transfer(0x00 | (reg & 0x1F)); // R_REGISTER
@@ -19,107 +17,94 @@ uint8_t nrfReadReg(uint8_t reg)
   return val;
 }
 
-void nrfReadRegN(uint8_t reg, uint8_t* buf, uint8_t len)
+void nrf_read_buf(uint8_t reg, uint8_t *buf, uint8_t len)
 {
   digitalWrite(10, LOW);
   SPI.transfer(0x00 | (reg & 0x1F));
-  for (uint8_t i = 0; i < len; i++) {
+  for (uint8_t i = 0; i < len; i++)
     buf[i] = SPI.transfer(0xFF);
-  }
   digitalWrite(10, HIGH);
 }
 
-void dumpReg1(uint8_t reg)
+void dump_nrf24()
 {
-  uint8_t val = nrfReadReg(reg);
+  uint8_t buf[5];
 
-  Serial.print("REG 0x");
-  if (reg < 0x10) Serial.print("0");
-  Serial.print(reg, HEX);
-  Serial.print(" : ");
-  if (val < 0x10) Serial.print("0");
-  Serial.println(val, HEX);
-}
+  Serial.println("========== nRF24L01 REGISTER DUMP ==========");
 
-void dumpRegN(uint8_t reg, uint8_t len)
-{
-  uint8_t buf[5] = {0};
-  nrfReadRegN(reg, buf, len);
+  Serial.print("CONFIG        : 0x"); Serial.println(nrf_read_reg(0x00), HEX);
+  Serial.print("EN_AA         : 0x"); Serial.println(nrf_read_reg(0x01), HEX);
+  Serial.print("EN_RX_ADDR    : 0x"); Serial.println(nrf_read_reg(0x02), HEX);
+  Serial.print("SETUP_AW      : 0x"); Serial.println(nrf_read_reg(0x03), HEX);
+  Serial.print("SETUP_RETR    : 0x"); Serial.println(nrf_read_reg(0x04), HEX);
+  Serial.print("RF_CH         : 0x"); Serial.println(nrf_read_reg(0x05), HEX);
+  Serial.print("RF_SETUP      : 0x"); Serial.println(nrf_read_reg(0x06), HEX);
+  Serial.print("STATUS        : 0x"); Serial.println(nrf_read_reg(0x07), HEX);
+  Serial.print("OBSERVE_TX    : 0x"); Serial.println(nrf_read_reg(0x08), HEX);
+  Serial.print("RPD           : 0x"); Serial.println(nrf_read_reg(0x09), HEX);
 
-  Serial.print("REG 0x");
-  if (reg < 0x10) Serial.print("0");
-  Serial.print(reg, HEX);
-  Serial.print(" : ");
-
-  for (uint8_t i = 0; i < len; i++) {
-    if (buf[i] < 0x10) Serial.print("0");
-    Serial.print(buf[i], HEX);
-    Serial.print(" ");
-  }
+  nrf_read_buf(0x0A, buf, 5);
+  Serial.print("RX_ADDR_P0    : ");
+  for (int i = 0; i < 5; i++) { Serial.print(buf[i], HEX); Serial.print(" "); }
   Serial.println();
-}
 
+  nrf_read_buf(0x0B, buf, 5);
+  Serial.print("RX_ADDR_P1    : ");
+  for (int i = 0; i < 5; i++) { Serial.print(buf[i], HEX); Serial.print(" "); }
+  Serial.println();
 
-void dumpAllRegister(void) {
-  Serial.println("===== NRF24 HEX REGISTER DUMP =====");
+  Serial.print("RX_ADDR_P2    : 0x"); Serial.println(nrf_read_reg(0x0C), HEX);
+  Serial.print("RX_ADDR_P3    : 0x"); Serial.println(nrf_read_reg(0x0D), HEX);
+  Serial.print("RX_ADDR_P4    : 0x"); Serial.println(nrf_read_reg(0x0E), HEX);
+  Serial.print("RX_ADDR_P5    : 0x"); Serial.println(nrf_read_reg(0x0F), HEX);
 
-  dumpReg1(0x00);
-  dumpReg1(0x01);
-  dumpReg1(0x02);
-  dumpReg1(0x03);
-  dumpReg1(0x04);
-  dumpReg1(0x05);
-  dumpReg1(0x06);
-  dumpReg1(0x07);
-  dumpReg1(0x08);
-  dumpReg1(0x09);
+  nrf_read_buf(0x10, buf, 5);
+  Serial.print("TX_ADDR       : ");
+  for (int i = 0; i < 5; i++) { Serial.print(buf[i], HEX); Serial.print(" "); }
+  Serial.println();
 
-  dumpRegN(0x0A, 5); // RX_ADDR_P0
-  dumpRegN(0x0B, 5); // RX_ADDR_P1
-  dumpRegN(0x10, 5); // TX_ADDR
+  Serial.print("RX_PW_P0      : "); Serial.println(nrf_read_reg(0x11));
+  Serial.print("RX_PW_P1      : "); Serial.println(nrf_read_reg(0x12));
+  Serial.print("RX_PW_P2      : "); Serial.println(nrf_read_reg(0x13));
+  Serial.print("RX_PW_P3      : "); Serial.println(nrf_read_reg(0x14));
+  Serial.print("RX_PW_P4      : "); Serial.println(nrf_read_reg(0x15));
+  Serial.print("RX_PW_P5      : "); Serial.println(nrf_read_reg(0x16));
 
-  dumpReg1(0x11);
-  dumpReg1(0x12);
-  dumpReg1(0x13);
-  dumpReg1(0x14);
-  dumpReg1(0x15);
-  dumpReg1(0x16);
+  Serial.print("FIFO_STATUS   : 0x"); Serial.println(nrf_read_reg(0x17), HEX);
+  Serial.print("DYNPD         : 0x"); Serial.println(nrf_read_reg(0x1C), HEX);
+  Serial.print("FEATURE       : 0x"); Serial.println(nrf_read_reg(0x1D), HEX);
 
-  dumpReg1(0x17);
-  dumpReg1(0x1C);
-  dumpReg1(0x1D);
-
-  Serial.println("===== END DUMP =====");
+  Serial.println("==========================================");
 }
 
 void setup() {
   Serial.begin(115200);
-  radio.begin();
-  printf_begin();
 
-  // ===== NO ACK CONFIG =====
-  Serial.println("===== NO ACK CONFIG =====");
+  radio.begin();
+
+  // ===== AUTO ACK CONFIG =====
   radio.setAutoAck(false);
-  radio.setRetries(5, 4);
+  // radio.setRetries(5, 15);
+  radio.setCRCLength(RF24_CRC_16);
   radio.disableDynamicPayloads();
   radio.setPayloadSize(32);
 
-  radio.setChannel(0x0C);
+  radio.setChannel(12);
   radio.setDataRate(RF24_1MBPS);
   radio.setPALevel(RF24_PA_MAX);
 
   radio.openWritingPipe(address);
-  radio.stopListening();            // TX mode
+  radio.stopListening();             // TX mode
 
-  dumpAllRegister();
-  Serial.println("TX NO-ACK READY");
+   dump_nrf24();
+  Serial.println("TX AUTO-ACK READY");
 }
 
 void loop() {
-  bool ok = radio.write(&txPayload, 32);
+  bool ok = radio.write(txPayload, 32);
 
   Serial.print("Send status: ");
-  Serial.println(ok ? "OK" : "FAIL");
+  Serial.println(ok ? "ACK OK" : "ACK FAIL");
 
   delay(1000);
 }

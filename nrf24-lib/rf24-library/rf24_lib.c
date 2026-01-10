@@ -125,17 +125,49 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
     spi_endTransaction(rf);   
 }
 
+uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
+{
+    bool result = false;
+
+    //sending
+    rf24_write_data(rf, buffer, size);
+
+    //observe after sending
+    uint8_t observe;  //check retries count
+    uint8_t status; //check TX_DS,... flag
+    uint32_t start = HAL_GetTick();
+    const uint32_t timeout = 1000;
+
+    do {
+        rf24_read_reg(rf, OBSERVE_TX, &observe, ONE_BYTE);
+        rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
+        printf("Observe_TX: %02X\r\n", observe);
+    } while ( !(status & (V_TX_DS|MAX_RT)) && (HAL_GetTick() - start < timeout) );
+
+    if (status & V_TX_DS) {
+        printf("[INFO] TX is oke!\r\n");
+        result = 1;
+    }
+    if (status & V_MAX_RT) {
+        printf("[ERR] TX max retries!\r\n");
+        result = 0;
+    }
+    if (status & V_RX_DR) {
+        printf("[INFO] Having data in RX!\r\n");
+    }
+
+    //POWER DOWN
+    rf24_power_enable_set(rf, false);
+
+    rf24_empty_tx_buffer(rf);
+    return result;
+}
+
 /**
  * @brief RF24 have payload buffer, check this setting for payload and override data on this
  */
 uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 {
-    if (buffer == NULL || size <= 0) {
-        printf("[ERR] Return before write!!\r\n");
-        return 0;
-    }
-    uint8_t status;
-
     //pre-processsing data
 	uint8_t payloadTX[ONE_SECTION_BUF] = {0};
     if (rf->dynamic_pay_load) {
@@ -151,9 +183,16 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         size = ONE_SECTION_BUF;
     }
     
+    //wake up
+    uint8_t config;
+    rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
+    config |= (ENABLE << PWR_UP);
+    config &= ~(ENABLE << PRIM_RX);
+    rf24_write_reg(rf, CONFIG_REG, config);
+    delay_us(150);
+
     //condition on write data
     rf24_ce_pin(rf, DISABLE);
-
     //spi transmission set
     spi_beginTransaction(rf);
     uint8_t cmd = W_PAY_LOAD;
@@ -170,44 +209,10 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     spi_endTransaction(rf);
     // ========== STEP 4: Pulse CE to transmit ==========
     rf24_ce_pin(rf, ENABLE);
-    delay_us(100);
-
-    // ========== STEP 5: Wait with proper timeout ==========
-    // uint32_t start = DWT->CYCCNT;
-    // uint32_t timeout_ticks = convert_us_to_tick(300);  // 300us timeout
-    uint8_t start = HAL_GetTick();
-
-    while (1) {
-        rf24_read_reg(rf, STATUS_REG, &status, ONE_BYTE);
-        printf("status reg: %02X\r\n", status);
-        // Check for completion
-        if (status & V_TX_DS) {
-            printf("Success!!\r\n");
-            rf24_clear_irq(rf);
-            rf24_empty_tx_buffer(rf);
-            rf24_ce_pin(rf, DISABLE);
-            return 1;
-        }
-
-        if (status & V_MAX_RT) {
-            rf24_clear_irq(rf);
-            rf24_empty_tx_buffer(rf);
-            goto fail;
-        }
-        
-        if (HAL_GetTick() - start >= 95) {
-            printf(">>...timeout|\r\n");
-            goto fail;
-        }
-    }
-    
-fail:
-    // Flush TX FIFO
-    printf("[ERR] status reg: %02X\r\n", status);
-    rf24_empty_tx_buffer(rf);
-    rf24_clear_irq(rf);
+    delay_us(15);
     rf24_ce_pin(rf, DISABLE);
-    return 0;
+
+    return 1;
 }
 
 /**
@@ -355,6 +360,21 @@ void rf24_power_enable_set(RF24_Handle *rf, uint8_t status)
     if (status) {
         HAL_Delay(2);  // Wait for power-up (1.5ms minimum)
     }
+}
+
+/**
+ * @brief: power amplifier
+ */
+void rf24_power_amp_set(RF24_Handle *rf, uint8_t level) {
+    uint8_t rf_setup;
+    rf24_ce_pin(rf, DISABLE);
+    
+    rf24_read_reg(rf, CONFIG_REG, &rf_setup, ONE_BYTE);
+    //reset
+    rf_setup &= ~(3 << 1);
+    //set
+    rf_setup |= (level << 1);
+    rf24_write_reg(rf, CONFIG_REG, rf_setup);
 }
 
 /**
@@ -538,6 +558,12 @@ void rf24_dynamic_payLoad(RF24_Handle *rf, bool type) {
     rf24_write_reg(rf, FEATURE, feature);
 }
 
+void rf24_addr_width_set(RF24_Handle *rf, uint8_t size) {
+    rf24_ce_pin(rf, DISABLE);
+    size &= 0x03;
+    rf24_write_reg(rf, SETUP_AW, size);
+}
+
 void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack) {
     rf24_ce_pin(rf, DISABLE);
 
@@ -555,16 +581,6 @@ void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack) {
 }
 
 /**
- * Registry for TX tunnel prepare for writing
- */
-void rf24_pipeData_tx_registry(RF24_Handle *rf, const uint8_t* address)
-{
-    rf24_ce_pin(rf, DISABLE);
-    rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, address, MAX_ADDRESS);
-    rf24_write_reg_mul(rf, TX_ADDR, address, MAX_ADDRESS);
-}
-
-/**
  * @brief Configuration mode RX on RF24
  * @def change to RX mode -> TX is disable
  */
@@ -574,7 +590,7 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
     rf24_ce_pin(rf, DISABLE);
         
     //reset status register
-    rf24_reset(rf, STATUS_REG);
+    rf24_reset(rf);
 
     //enable address pipe
     rf24_pipeData_rx_open(rf, pipeNum, addressRX);
@@ -592,29 +608,38 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
     rf24_ce_pin(rf, ENABLE);
 }
 
+static void rf24_tx_addr_setting(RF24_Handle *rf, const uint8_t* tx_address) {
+    
+    rf->is_tx_mode = true;
+    rf24_ce_pin(rf, DISABLE);
+    memcpy(rf->tx_addr, tx_address, MAX_ADDRESS);
+
+    //write tx address
+    rf24_write_reg_mul(rf, TX_ADDR, rf->tx_addr, MAX_ADDRESS);
+    //write ack address (pipe0)
+    rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rf->tx_addr, MAX_ADDRESS);
+    
+    if (rf->is_auto_ack) {
+        rf24_autoAck_config(rf, RE_ACK_TIME, RE_ACK_COUNT);
+    }
+}
+
 /**
  * @brief Configuration mode TX on RF24
  * @def reverse with rx mode
  */
 void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
 {
-    rf->is_tx_mode = true;
-    memcpy(rf->tx_addr, tx_address, MAX_ADDRESS);
-    rf24_ce_pin(rf, DISABLE);
-    
-    //write tx address
-    rf24_write_reg_mul(rf, TX_ADDR, rf->tx_addr, MAX_ADDRESS);
-    //write ack address (pipe0)
-    rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rf->tx_addr, MAX_ADDRESS);
+    rf24_tx_addr_setting(rf, tx_address);
 
     //power up and set to tx mode
     uint8_t config = 0;
     rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
     bool was_powered_down = !(config & (1 << PWR_UP));
-
     if ( was_powered_down ) {
         config |= (1 << PWR_UP);
     }
+
     if ( config & (1 << PRIM_RX) ) {
         config &= ~(1 << PRIM_RX);
     }
@@ -624,8 +649,8 @@ void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
         HAL_Delay(2);
     }
 
-    //save config for later use
-    rf->cfg.rf24_config_reg = config;
+    rf24_empty_tx_buffer(rf);
+    rf24_empty_rx_buffer(rf);
 }
 
 /**
@@ -684,119 +709,126 @@ void rf24_empty_rx_buffer(RF24_Handle *rf)
 void rf24_init(RF24_Handle *rf)
 {
     printf("\n====  INIT RF24   ====\r\n");
-    uint8_t reset_val = 0x00;
-    uint8_t temp_val = 0;
+
+    rf24_ce_pin(rf, false);
+    spi_endTransaction(rf);
+
+    delay_us(20);
 
     //RESET ALL REG TO INITIAL
-    rf24_reset(rf, 0);
+    rf24_reset(rf);
 
-    //config later
-    rf24_write_reg(rf, CONFIG_REG, reset_val);
-
-    //no auto ack
-    rf24_autoAck_enable(rf, false);
-    
-    //write data with normal command
-    rf24_ack_payload(rf, false);
-    rf24_dynamic_payLoad(rf, false);
-    rf24_cmd_on_write(rf, true);
-
-    //enable only pipe 0 and pipe 1
-    uint8_t rx_addr_rest_val = 0x03;
-    rf24_write_reg(rf, EN_RXADDR, rx_addr_rest_val);
-
-    //address width reset to user specific
-    temp_val = 0x03; //5 bytes address
-    rf24_write_reg(rf, SETUP_AW, temp_val);
-    
-    //default rx addr for pipe 1
-    uint8_t rx_pipe_1_default[MAX_ADDRESS] = {0xC2, 0xC2, 0xC2, 0xC2, 0xC2};
-    rf24_write_reg_mul(rf, RX_PIPE_ADDR_1, rx_pipe_1_default, MAX_ADDRESS);
-
-    //default rx address width for other pipe
-    uint8_t max_width = ONE_SECTION_BUF;
-    for (uint8_t i = 0; i <= 5; i++) {
-        rf24_write_reg(rf, RX_PW_P0+i, max_width);
-    }
-
-    //no retransmission
-    rf24_write_reg(rf, SETUP_RETR, reset_val);
-    
-    //channel reset to 0
-    rf24_channel_set(rf, reset_val);
-    
-    //data rate and power reset to default (2MBps, 0dBm)
-    temp_val = 0x0E; //0000 1110
-    rf24_write_reg(rf, RF_SETUP, temp_val);
-
+    rf24_autoAck_config(rf, 1500, 15);
     rf24_crc_setting(rf, true, RF24_CRC_16);
+    //address default is 5 bytes, but set for fun
+    rf24_addr_width_set(rf, ADDR_5_BYTE);
+    rf24_baudrate_set(rf, BAUD_1MBPS);
+    rf24_power_amp_set(rf, MAX_POWER);
+    rf24_autoAck_enable(rf, false);
+    rf24_dynamic_payLoad(rf, false);
 
-    rf24_empty_rx_buffer(rf);
-    rf24_empty_tx_buffer(rf);
-
-    //power on (write register only work on powerdown/standby mode)
     rf24_power_enable_set(rf, true);
+    printf("Status CE pin: %d\r\n", rf->cfg.ce_status);
 
     printf("====  END INIT RF24   ====\r\n");
 }
 
 /**
- * @brief: reset rf24 module
+ * @brief: reset rf24 module (old)
  * @note:
  */
-void rf24_reset(RF24_Handle *rf, uint8_t reg)
-{
-    if (reg == STATUS_REG) {
-    	uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
-    	rf24_write_reg(rf, STATUS_REG, clr);
-    }
-    else if (reg == FIFO_STATUS) {
-        uint8_t reset_val = 0x11;
-        rf24_write_reg(rf, FIFO_STATUS, reset_val);
-    }
-    else {
-        printf("rf24_reset: others register reset\r\n");
-        rf24_write_reg(rf, CONFIG_REG,   0x08);
-        rf24_write_reg(rf, EN_AA,        0x3F);
-        rf24_write_reg(rf, EN_RXADDR,    0x03);
-        rf24_write_reg(rf, SETUP_AW,     0x03);
-        rf24_write_reg(rf, SETUP_RETR,	 0x03);
-        rf24_write_reg(rf, RF_CH,        0x02);
-        rf24_write_reg(rf, RF_SETUP,     0x0E);
-        uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
-        rf24_write_reg(rf, STATUS_REG, clr);
-        rf24_write_reg(rf, OBSERVE_TX,    0x00);
-        rf24_write_reg(rf, RPD,           0x00);
+// void rf24_reset(RF24_Handle *rf, uint8_t reg)
+// {
+//     if (reg == STATUS_REG) {
+//     	uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
+//     	rf24_write_reg(rf, STATUS_REG, clr);
+//     }
+//     else if (reg == FIFO_STATUS) {
+//         uint8_t reset_val = 0x11;
+//         rf24_write_reg(rf, FIFO_STATUS, reset_val);
+//     }
+//     else {
+//         printf("rf24_reset: others register reset\r\n");
+//         rf24_write_reg(rf, CONFIG_REG,   0x08);
+//         rf24_write_reg(rf, EN_AA,        0x3F);
+//         rf24_write_reg(rf, EN_RXADDR,    0x03);
+//         rf24_write_reg(rf, SETUP_AW,     0x03);
+//         rf24_write_reg(rf, SETUP_RETR,	 0x03);
+//         rf24_write_reg(rf, RF_CH,        0x02);
+//         rf24_write_reg(rf, RF_SETUP,     0x0E);
+//         uint8_t clr = (1<<TX_DS) | (1<<MAX_RT) | (1<<RX_DR);
+//         rf24_write_reg(rf, STATUS_REG, clr);
+//         rf24_write_reg(rf, OBSERVE_TX,    0x00);
+//         rf24_write_reg(rf, RPD,           0x00);
 
-        uint8_t rx_addr_p0_def[5];
-        memcpy(rx_addr_p0_def, rf->pipe0_rx_addr, MAX_ADDRESS);
-        rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rx_addr_p0_def, MAX_ADDRESS);
+//         uint8_t rx_addr_p0_def[5];
+//         memcpy(rx_addr_p0_def, rf->pipe0_rx_addr, MAX_ADDRESS);
+//         rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rx_addr_p0_def, MAX_ADDRESS);
 
-        uint8_t rx_addr_p1_def[5];
-        memcpy(rx_addr_p1_def, rf->pipe1_rx_addr, MAX_ADDRESS);
-        rf24_write_reg_mul(rf, RX_PIPE_ADDR_1, rx_addr_p1_def, MAX_ADDRESS);
+//         uint8_t rx_addr_p1_def[5];
+//         memcpy(rx_addr_p1_def, rf->pipe1_rx_addr, MAX_ADDRESS);
+//         rf24_write_reg_mul(rf, RX_PIPE_ADDR_1, rx_addr_p1_def, MAX_ADDRESS);
 
-        rf24_write_reg(rf, RX_PIPE_ADDR_2, 0xC3);
-        rf24_write_reg(rf, RX_PIPE_ADDR_3, 0xC4);
-        rf24_write_reg(rf, RX_PIPE_ADDR_4, 0xC5);
-        rf24_write_reg(rf, RX_PIPE_ADDR_5, 0xC6);
+//         rf24_write_reg(rf, RX_PIPE_ADDR_2, 0xC3);
+//         rf24_write_reg(rf, RX_PIPE_ADDR_3, 0xC4);
+//         rf24_write_reg(rf, RX_PIPE_ADDR_4, 0xC5);
+//         rf24_write_reg(rf, RX_PIPE_ADDR_5, 0xC6);
 
-        uint8_t tx_addr_def[5];
-        memcpy(tx_addr_def, rf->tx_addr, MAX_ADDRESS);
-        rf24_write_reg_mul(rf, TX_ADDR, tx_addr_def, MAX_ADDRESS);
+//         uint8_t tx_addr_def[5];
+//         memcpy(tx_addr_def, rf->tx_addr, MAX_ADDRESS);
+//         rf24_write_reg_mul(rf, TX_ADDR, tx_addr_def, MAX_ADDRESS);
 
-        rf24_write_reg(rf, RX_PW_P0, 0x00);
-        rf24_write_reg(rf, RX_PW_P1, 0x00);
-        rf24_write_reg(rf, RX_PW_P2, 0x00);
-        rf24_write_reg(rf, RX_PW_P3, 0x00);
-        rf24_write_reg(rf, RX_PW_P4, 0x00);
-        rf24_write_reg(rf, RX_PW_P5, 0x00);
+//         rf24_write_reg(rf, RX_PW_P0, 0x00);
+//         rf24_write_reg(rf, RX_PW_P1, 0x00);
+//         rf24_write_reg(rf, RX_PW_P2, 0x00);
+//         rf24_write_reg(rf, RX_PW_P3, 0x00);
+//         rf24_write_reg(rf, RX_PW_P4, 0x00);
+//         rf24_write_reg(rf, RX_PW_P5, 0x00);
 
-        rf24_write_reg(rf, FIFO_STATUS, 0x11);
-        rf24_write_reg(rf, DYNPD,       0x00);
-        rf24_write_reg(rf, FEATURE,     0x00);
-    }
+//         rf24_write_reg(rf, FIFO_STATUS, 0x11);
+//         rf24_write_reg(rf, DYNPD,       0x00);
+//         rf24_write_reg(rf, FEATURE,     0x00);
+//     }
+// }
+
+/**
+ * @brief: reset rf24 module (new method)
+ * @note:
+ */
+void rf24_reset(RF24_Handle *rf) {
+
+    //pin reset
+    printf("rf24_reset: ce and csn\r\n");
+    rf24_ce_pin(rf, false);
+    spi_endTransaction(rf);
+
+    //register
+    printf("rf24_reset: register\r\n");
+    rf24_write_reg(rf, CONFIG_REG,   0x08);
+    rf24_write_reg(rf, EN_AA,        0x3F);
+    rf24_write_reg(rf, EN_RXADDR,    0x03);
+    rf24_write_reg(rf, SETUP_AW,     0x03);
+    rf24_write_reg(rf, SETUP_RETR,	 0x03);
+    rf24_write_reg(rf, RF_CH,        0x02);
+    rf24_write_reg(rf, RF_SETUP,     0x07);
+
+    rf24_write_reg(rf, RX_PW_P0, 0x00);
+    rf24_write_reg(rf, RX_PW_P1, 0x00);
+    rf24_write_reg(rf, RX_PW_P2, 0x00);
+    rf24_write_reg(rf, RX_PW_P3, 0x00);
+    rf24_write_reg(rf, RX_PW_P4, 0x00);
+    rf24_write_reg(rf, RX_PW_P5, 0x00);
+
+    rf24_write_reg(rf, FIFO_STATUS, 0x11);
+    rf24_write_reg(rf, DYNPD,       0x00);
+    rf24_write_reg(rf, FEATURE,     0x00);
+
+    //empty fifo buffer
+    printf("rf24_reset: empty buffer\r\n");
+    rf24_empty_rx_buffer(rf);
+    rf24_empty_tx_buffer(rf);
 }
+
 
 /**
  * =============================================================================
