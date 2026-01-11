@@ -128,6 +128,12 @@ void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
 uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 {
     bool result = false;
+    rf24_tx_mode(rf, rf->tx_addr);
+
+    // static uint8_t count = 0;
+    // count ++;
+    // printf("\nsend %dth times", count);
+    // rf24_dump_registers(rf);
 
     //sending
     rf24_write_data(rf, buffer, size);
@@ -158,8 +164,10 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
     //POWER DOWN
     rf24_power_enable_set(rf, false);
-
+    //Flush TX buffer
     rf24_empty_tx_buffer(rf);
+    //Flush RX buffer
+    rf24_empty_rx_buffer(rf);
     return result;
 }
 
@@ -182,14 +190,6 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     	memcpy(payloadTX, buffer, size);
         size = ONE_SECTION_BUF;
     }
-    
-    //wake up
-    uint8_t config;
-    rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
-    config |= (ENABLE << PWR_UP);
-    config &= ~(ENABLE << PRIM_RX);
-    rf24_write_reg(rf, CONFIG_REG, config);
-    delay_us(150);
 
     //condition on write data
     rf24_ce_pin(rf, DISABLE);
@@ -209,7 +209,7 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     spi_endTransaction(rf);
     // ========== STEP 4: Pulse CE to transmit ==========
     rf24_ce_pin(rf, ENABLE);
-    delay_us(15);
+    delay_us(20);
     rf24_ce_pin(rf, DISABLE);
 
     return 1;

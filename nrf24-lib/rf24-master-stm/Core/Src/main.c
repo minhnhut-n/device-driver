@@ -134,6 +134,7 @@ int main(void)
   rf24_dump_registers(&rf_handle);
 
   rf24_channel_set(&rf_handle, 12);
+  rf24_autoAck_enable(&rf_handle, true);
   rf24_tx_mode(&rf_handle, tx_address);
   printf("User config\r\n");
   rf24_dump_registers(&rf_handle);
