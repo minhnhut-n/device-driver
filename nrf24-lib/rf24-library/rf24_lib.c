@@ -162,6 +162,8 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
         printf("[INFO] Having data in RX!\r\n");
     }
 
+    printf("done check\r\n");
+
     //POWER DOWN
     rf24_power_enable_set(rf, false);
     //Flush TX buffer
@@ -369,12 +371,12 @@ void rf24_power_amp_set(RF24_Handle *rf, uint8_t level) {
     uint8_t rf_setup;
     rf24_ce_pin(rf, DISABLE);
     
-    rf24_read_reg(rf, CONFIG_REG, &rf_setup, ONE_BYTE);
+    rf24_read_reg(rf, RF_SETUP, &rf_setup, ONE_BYTE);
     //reset
     rf_setup &= ~(3 << 1);
     //set
     rf_setup |= (level << 1);
-    rf24_write_reg(rf, CONFIG_REG, rf_setup);
+    rf24_write_reg(rf, RF_SETUP, rf_setup);
 }
 
 /**
@@ -384,9 +386,10 @@ void rf24_crc_setting(RF24_Handle *rf, bool enable, uint8_t numCRCByte)
 {
     rf24_ce_pin(rf, DISABLE);
 
+    rf->crc_setting = numCRCByte;
+
     uint8_t config = 0;
     rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
-
     if ( enable ) {
         config |= (1 << EN_CRC);
         if (numCRCByte == 1) {
@@ -644,6 +647,9 @@ void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
         config &= ~(1 << PRIM_RX);
     }
     rf24_write_reg(rf, CONFIG_REG, config);
+
+    if (rf->is_auto_ack)
+        rf24_crc_setting(rf, true, rf->crc_setting);
 
     if( was_powered_down ) {
         HAL_Delay(2);

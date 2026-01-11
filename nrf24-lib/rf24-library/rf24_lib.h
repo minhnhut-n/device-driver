@@ -41,13 +41,14 @@ typedef struct {
      * that need to restore to it own pipe 0 data.
     */
     uint8_t tx_addr[MAX_ADDRESS];
+    uint8_t crc_setting;
+    uint8_t cmd_send_data;
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
     uint8_t pipe1_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
-    bool cmd_send_data;
+    bool is_auto_ack;
     bool is_tx_mode;
     bool dynamic_pay_load;
-    bool is_auto_ack;
 } RF24_Handle;
 
 /**
