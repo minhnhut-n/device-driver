@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "rf24_lib.h"
+#include "stm_system_config.h"
 #include <string.h>
 
 #define isEmptyBuffer(buf)      ((buf) != NULL ? 0 : 1)
@@ -118,28 +119,25 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
+  //========STM_SYSTEM_CONFIG=========
+  DWT_Init();
+
   //========RF_CONFIGURATION==========
   rf_handle.cfg.cePin = CE_Pin;
   rf_handle.cfg.cePort = CE_GPIO_Port;
   rf_handle.cfg.csnPin = CS_Pin;
   rf_handle.cfg.csnPort = CS_GPIO_Port;
   rf_handle.cfg.hspi = &hspi2;
-  rf_handle.dynamic_pay_load = false;
 
   //========END CONFIGURATION==========
   rf24_init(&rf_handle);
-
-  printf("Begin user config\r\n");
-
-  rf24_autoAck_enable(&rf_handle, false);
-  rf24_baudrate_set(&rf_handle, BAUD_1MBPS);
-  rf24_channel_set(&rf_handle, 12);
-  rf24_PA_set(&rf_handle, RF24_PA_MAX);
-  rf24_tx_mode(&rf_handle, tx_address);
-
   rf24_dump_registers(&rf_handle);
 
-  printf("READY!!\r\n");
+  rf24_channel_set(&rf_handle, 12);
+  rf24_autoAck_enable(&rf_handle, true);
+  rf24_tx_mode(&rf_handle, tx_address);
+  printf("User config\r\n");
+  rf24_dump_registers(&rf_handle);
 
   /* USER CODE END 2 */
 
@@ -151,8 +149,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-
-    if (rf24_write_data(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0])) != 0)
+    if (rf24_transmit(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0])) != 0)
     {
       HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
     }
@@ -161,7 +158,7 @@ int main(void)
       HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
     }
 
-     HAL_Delay(500);
+    HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -279,7 +276,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;

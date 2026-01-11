@@ -44,7 +44,7 @@ typedef struct {
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
     uint8_t pipe1_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
-    bool is_enable_payload_ack;
+    bool cmd_send_data;
     bool is_tx_mode;
     bool dynamic_pay_load;
     bool is_auto_ack;
@@ -122,12 +122,22 @@ void spi_endTransaction(RF24_Handle *rf);
 /**
  * @brief function support for writing configuration wih spi
  */
-void rf24_write_reg(RF24_Handle *rf, uint8_t reg, const uint8_t *regData, uint8_t size);
+void rf24_write_reg(RF24_Handle *rf, uint8_t reg, uint8_t regData);
+/**
+ * @brief function support for writing configuration wih spi
+ */
+void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, uint8_t size);
+
 /**
  * @brief function support for reading configuration wih spi
  */
 void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 
+
+/** 
+ * @brief frame of sending step
+ */
+uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size);
 /**
  * @brief function support for writing user data wih spi
  */
@@ -148,7 +158,7 @@ bool isValid_AddrWidth(RF24_Handle *rf);
 /**
  * @brief Power consumption for rf24
  */
-void rf24_power_set(RF24_Handle *rf);
+void rf24_sig_amp(RF24_Handle *rf);
 
 /**
  * @brief change pin CE logic and status
@@ -210,13 +220,13 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel);
  */
 void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate);
 /**
- * @brief Auto Acknowledgment enable for rf24
- */
-void rf24_autoAck_enable(RF24_Handle *rf, bool type);
-/**
  * @brief Auto Acknowledgment configuration for rf24
  */
-void rf24_autoAck_config(RF24_Handle *rf);
+void rf24_autoAck_enable(RF24_Handle *rf, bool type);
+void rf24_autoAck_config(RF24_Handle *rf, uint16_t ack_time, uint8_t ack_retry);
+void rf24_ack_payload(RF24_Handle *rf, bool is_ack_payload);
+void rf24_dynamic_payLoad(RF24_Handle *rf, bool type);
+void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack);
 /**
  * @brief: CRC setting for payload transmit
  */
@@ -239,7 +249,7 @@ void rf24_init(RF24_Handle *rf);
  * @brief: reset rf24 module
  * @note:
  */
-void rf24_reset(RF24_Handle *rf, uint8_t reg);
+void rf24_reset(RF24_Handle *rf);
 
 /**
  * FOR DEBUG WITH SERIAL LOG ONLY

@@ -9,27 +9,28 @@ char rxBuffer[32];
 
 void setup() {
   Serial.begin(115200);
+
   radio.begin();
 
-  // ===== NO ACK CONFIG =====
-  radio.setAutoAck(false);          // ❌ Auto ACK OFF
-  radio.disableDynamicPayloads();   // ❌ Fixed payload
+  // ===== AUTO ACK CONFIG =====
+  radio.setAutoAck(true);
   radio.setCRCLength(RF24_CRC_16);
+  radio.disableDynamicPayloads();
   radio.setPayloadSize(32);
 
   radio.setChannel(12);
   radio.setDataRate(RF24_1MBPS);
   radio.setPALevel(RF24_PA_MAX);
 
-  radio.openReadingPipe(0, address);
-  radio.startListening();           // RX mode
+  radio.openReadingPipe(1, address);
+  radio.startListening();            // RX mode
 
-  Serial.println("RX NO-ACK READY");
+  Serial.println("RX AUTO-ACK READY");
 }
 
 void loop() {
   if (radio.available()) {
-    radio.read(&rxBuffer, 32);
+    radio.read(rxBuffer, 32);
 
     Serial.print("RX: ");
     Serial.println(rxBuffer);

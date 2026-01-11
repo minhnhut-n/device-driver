@@ -114,13 +114,14 @@
 #define RX_MODE			1
 #define TX_MODE			0
 #define MAX_ADDRESS 	5
-#define RF_SPI_TIMEOUT	15
+#define RF_SPI_TIMEOUT	200
 #define RX_PIPE_NULL_0	0
 #define ONE_BYTE        1
 #define ADDR_WD_OFFSET  2
+#define V_RX_DR         64
 #define V_TX_DS         32
 #define V_MAX_RT        16
-#define SPI_TIMEOUT     100
+#define SPI_TIMEOUT     2000
 
 #define PIPE0 0
 #define PIPE1 1
@@ -138,7 +139,7 @@
 #define	MID_HI_POWER 2
 #define MAX_POWER 	 3
 
-#define RE_ACK_TIME  500  //microseconds
+#define RE_ACK_TIME  250	  //microseconds
 #define RE_ACK_COUNT 5    //max re-ack count
 
 typedef enum {
@@ -149,5 +150,12 @@ typedef enum {
     RX_PIPE_ADDR_4 =	0x0E,
     RX_PIPE_ADDR_5 =	0x0F
 }pipe_enum_t;
+
+typedef enum {
+    ADDR_3_BYTE =	1,
+    ADDR_4_BYTE =	2,
+    ADDR_5_BYTE =	3
+}addr_width_enum_t;
+
 
 #endif /* INC_RF24_INFO_REG_H_ */
