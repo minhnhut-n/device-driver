@@ -16,6 +16,7 @@ void setup() {
   radio.setAutoAck(true);
   radio.setCRCLength(RF24_CRC_16);
   radio.disableDynamicPayloads();
+
   radio.setPayloadSize(32);
 
   radio.setChannel(12);

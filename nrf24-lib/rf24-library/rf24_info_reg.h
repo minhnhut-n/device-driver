@@ -121,7 +121,7 @@
 #define V_RX_DR         64
 #define V_TX_DS         32
 #define V_MAX_RT        16
-#define SPI_TIMEOUT     2000
+#define SPI_TIMEOUT     200
 
 #define PIPE0 0
 #define PIPE1 1
