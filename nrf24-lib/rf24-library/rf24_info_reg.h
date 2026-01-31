@@ -27,8 +27,8 @@
 #define FLUSH_TX		0xE1 //Used to throw out data
 #define FLUSH_RX		0xE2 //Used to receive data
 
-#define W_ACK_PAYLOAD	0xA8 //Used with ack check with frame (if use)
-#define W_NO_ACK_PAYLD	0xB0 //Same but no ack in frame
+#define W_TX_PAYLOAD	0xA0 //Used with ack check with frame (if use)
+#define W_TX_PAYLOAD_NOACK	0xB0 //Same but no ack in frame
 
 #define NOP				0xFF //None of operation
 #define R_RX_PL_WID		0x70 //Read RX width on top.
