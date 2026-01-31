@@ -34,7 +34,6 @@ typedef struct {
 
 typedef struct {
     RF24_Config cfg;
-    uint8_t power_amplifier;
     uint8_t payload_size;
     /**
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
@@ -49,10 +48,9 @@ typedef struct {
     bool is_auto_ack;
     bool is_tx_mode;
     bool dynamic_pay_load;
+    bool power_state;
 } RF24_Handle;
 
-/**
- */
 typedef enum
 {
     RF24_PA_MIN = 0,

@@ -136,6 +136,7 @@ int main(void)
   rf24_channel_set(&rf_handle, 12);
   rf24_autoAck_enable(&rf_handle, true);
   rf24_tx_mode(&rf_handle, tx_address);
+  rf24_cmd_on_write(&rf_handle, true);  // Use W_TX_PAYLOAD_NOACK (no ACK required)
   printf("User config\r\n");
   rf24_dump_registers(&rf_handle);
 
@@ -149,13 +150,20 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    if (rf24_transmit(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0])) != 0)
     {
-      HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-    }
-    else
-    {
-      HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
+      uint8_t tx_res = rf24_transmit(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0]));
+      if (tx_res == 1) {
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+      } else if (tx_res == 2) {
+        HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
+        printf("[WARN] rf24 transmit timeout\r\n");
+      } else if (tx_res == 3) {
+        HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
+        printf("[ERR] rf24 max retries\r\n");
+      } else {
+        HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
+        printf("[ERR] rf24 write failed\r\n");
+      }
     }
 
     HAL_Delay(200);
