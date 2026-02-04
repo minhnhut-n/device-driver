@@ -32,7 +32,7 @@ void delay_us(uint32_t us)
     uint32_t start = DWT->CYCCNT;
     //current system core clock is 8Mhz
     //cycle count = ticks
-    uint32_t ticks = us * (SystemCoreClock / 1000000);
+    uint32_t ticks = us * (SystemCoreClock / 10e6);
 
     while ((DWT->CYCCNT - start) < ticks);
     //meet cycle

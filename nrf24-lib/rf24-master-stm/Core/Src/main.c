@@ -136,7 +136,14 @@ int main(void)
   rf24_channel_set(&rf_handle, 12);
   rf24_autoAck_enable(&rf_handle, true);
   rf24_tx_mode(&rf_handle, tx_address);
-  rf24_cmd_on_write(&rf_handle, true);  // Use W_TX_PAYLOAD_NOACK (no ACK required)
+rf24_cmd_on_write(&rf_handle, true);  // Use W_TX_PAYLOAD_NOACK (no ACK required)
+
+// Test carrier wave functionality
+rf24_carrier_wave_enable(&rf_handle, true);
+rf24_pll_lock_enable(&rf_handle, true);
+rf24_channel_set(&rf_handle, 12);
+rf24_PA_set(&rf_handle, MAX_POWER);
+rf24_ce_pin(&rf_handle, true);  // Keep CE high for continuous carrier
   printf("User config\r\n");
   rf24_dump_registers(&rf_handle);
 

@@ -133,7 +133,7 @@ void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, ui
 void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 
 
-/** 
+/**
  * @brief frame of sending step
  */
 uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size);
@@ -226,6 +226,8 @@ void rf24_autoAck_config(RF24_Handle *rf, uint16_t ack_time, uint8_t ack_retry);
 void rf24_ack_payload(RF24_Handle *rf, bool is_ack_payload);
 void rf24_dynamic_payLoad(RF24_Handle *rf, bool type);
 void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack);
+void rf24_carrier_wave_enable(RF24_Handle *rf, bool enable);
+void rf24_pll_lock_enable(RF24_Handle *rf, bool enable);
 /**
  * @brief: CRC setting for payload transmit
  */
