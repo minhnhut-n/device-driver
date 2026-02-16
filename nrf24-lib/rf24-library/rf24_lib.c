@@ -36,10 +36,9 @@ static const uint8_t pipeAddr[6] = {RX_PIPE_ADDR_0, RX_PIPE_ADDR_1, RX_PIPE_ADDR
  * @author minhnhut-n
  * @function: used to clear interrupt flag after transmission, such as, MAX_RT, RX_DR, TX_DS
  */
-static inline void rf24_clear_irq(RF24_Handle *rf)
+static inline void rf24_clear_all_irq(RF24_Handle *rf)
 {
-    uint8_t clr = (V_MAX_RT | V_RX_DR | V_TX_DS);
-    rf24_write_reg(rf, STATUS_REG, clr);
+    rf24_write_reg(rf, STATUS_REG, RF24_IRQ_ALL);
 }
 
 /**
@@ -106,7 +105,6 @@ void spi_endTransaction(RF24_Handle *rf)
  */
 void rf24_write_reg(RF24_Handle *rf, uint8_t reg, uint8_t regData)
 {
-    rf24_ce_pin(rf, false);
     spi_beginTransaction(rf);
     uint8_t status, dump;
     uint8_t cmd = W_REG | (reg & 0x1F); //for ensuring reg not over 5 bits
@@ -148,16 +146,39 @@ void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, ui
  * @version 0.1
  * @brief rf24_read_reg
  * @author minhnhut-n
- * @function: support to read register data from nrf24, there is no seperate API such as the "write" ones.
+ * @function: support to read single register data from nrf24.
  */
-void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
+void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer)
+{
+    spi_beginTransaction(rf);
+    uint8_t cmd = R_REG | (reg & 0x1F);
+    uint8_t dummy = NOP;
+    uint8_t status;
+
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("Error when read config %02X \r\n", reg);
+    }
+
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &dummy, buffer, 1, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("Error when read config data %02X \r\n", reg);
+    }
+    spi_endTransaction(rf);   
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_read_reg
+ * @author minhnhut-n
+ * @function: support to read multiple register data from nrf24.
+ */
+void rf24_read_reg_mul(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size)
 {
     spi_beginTransaction(rf);
     uint8_t cmd = R_REG | (reg & 0x1F); //for ensuring reg not over 5 bits
     uint8_t dummy = NOP;
     uint8_t status;
 
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, ONE_BYTE, RF_SPI_TIMEOUT) != HAL_OK) {
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status, 1, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("Error when read config %02X \r\n", reg);
     }
 
@@ -232,8 +253,8 @@ static rf24_event_t rf24_whatHappened(RF24_Handle *rf, uint8_t status, bool time
                rf->cmd_send_data, rf->is_auto_ack, rf->is_tx_mode, rf->cfg.ce_status);
 
         rf24_clear_irq(rf);
-        rf24_empty_tx_buffer(rf);
-        rf24_empty_rx_buffer(rf);
+        rf24_flush_tx_buffer(rf);
+        rf24_flush_rx_buffer(rf);
 
         // Recovery: power cycle the nRF24 to recover from stuck state
         printf("[WARN] Performing nRF24 recovery (power cycle + reset)...\r\n");
@@ -269,8 +290,8 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     uint8_t write_ok = rf24_write_data(rf, buffer, size);
     if (!write_ok) {
         rf24_clear_irq(rf);
-        rf24_empty_tx_buffer(rf);
-        rf24_empty_rx_buffer(rf);
+        rf24_flush_tx_buffer(rf);
+        rf24_flush_rx_buffer(rf);
         return 0; // write failed
     }
 
@@ -329,7 +350,7 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
             /* Clean up and re-attempt transmission */
             rf24_clear_irq(rf);
-            rf24_empty_tx_buffer(rf);
+            rf24_flush_tx_buffer(rf);
             HAL_Delay(10);
 
             /* Re-write payload */
@@ -377,8 +398,8 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     rf24_event_t evt = rf24_whatHappened(rf, status, timed_out);
 
     rf24_clear_irq(rf);
-    rf24_empty_tx_buffer(rf);
-    rf24_empty_rx_buffer(rf);
+    rf24_flush_tx_buffer(rf);
+    rf24_flush_rx_buffer(rf);
 
     if (timed_out && evt == RF24_EVT_TIMEOUT) {
         return 2; // timeout
@@ -540,10 +561,6 @@ void rf24_PA_set(RF24_Handle *rf, uint8_t level)
  */
 void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
 {
-    rf24_ce_pin(rf, false);
-    uint8_t reset = 0;
-    rf24_read_reg(rf, RF_CH, &reset, ONE_BYTE);
-
     if(channel > 125 || channel < 0)
     {
         printf("Channel set invalid\r\n");
@@ -566,15 +583,15 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 
     switch (baudrate)
     {
-    case BAUD_1MBPS:
+    case RF24_1MBPS:
         config &= ~(1<<RF_DR_HIGH);
         config &= ~(1<<RF_DR_LOW);
         break;
-    case BAUD_2MBPS:
+    case RF24_2MBPS:
         config |= (1<<RF_DR_HIGH);
         config &= ~(1<<RF_DR_LOW);
         break;
-    case BAUD_250KB:
+    case RF24_250KBPS:
         config &= ~(1<<RF_DR_HIGH);
         config |= (1<<RF_DR_LOW);
         break;
@@ -592,23 +609,19 @@ void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
  */
 void rf24_power_enable_set(RF24_Handle *rf, uint8_t status)
 {
-    uint8_t config = 0;
-    rf24_ce_pin(rf, false);
-    rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
-
     if (status) {
-        config |= (1 << PWR_UP);
+        rf->cfg.rf24_config_reg |= (1 << PWR_UP);
         rf->power_state = true;
     }
     else {
-        config &= ~(1 << PWR_UP);
+        rf->cfg.rf24_config_reg &= ~(1 << PWR_UP);
         rf->power_state = false;
     }
 
-    rf24_write_reg(rf, CONFIG_REG, config);
+    rf24_write_reg(rf, CONFIG_REG, rf->cfg.rf24_config_reg);
 
     if (status) {
-        HAL_Delay(2);  // Wait for power-up (1.5ms minimum)
+        HAL_Delay(5); //ref from community
     }
 }
 
@@ -753,7 +766,6 @@ void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
  */
 void rf24_autoAck_enable(RF24_Handle *rf, bool type)
 {
-    rf24_ce_pin(rf, false);    
     uint8_t config_aa = 0x00;
 
     if (type)
@@ -823,20 +835,13 @@ void rf24_ack_payload(RF24_Handle *rf, bool is_ack_payload)
  * (only available on nrf24l01+)
  */
 void rf24_dynamic_payLoad(RF24_Handle *rf, bool type) {
-    rf24_ce_pin(rf, false);
-    uint8_t feature = 0x00;
-    rf24_read_reg(rf, FEATURE, &feature, ONE_BYTE);
-
     if (type) {
-        feature |= (1 << EN_DPL);
-        rf->dynamic_pay_load = true;
+        rf->dynamic_payload_enabled = true;
         rf24_write_reg(rf, DYNPD, 0x3F); // enable dynamic payload trên tất cả pipe
     } else {
-        feature &= ~(1 << EN_DPL);
-        rf->dynamic_pay_load = false;
+        rf->dynamic_payload_enabled = false;
         rf24_write_reg(rf, DYNPD, 0x00); // disable dynamic payload
     }
-    rf24_write_reg(rf, FEATURE, feature);
 }
 
 /**
@@ -847,7 +852,16 @@ void rf24_dynamic_payLoad(RF24_Handle *rf, bool type) {
  */
 void rf24_addr_width_set(RF24_Handle *rf, uint8_t size)
 {
-    rf24_ce_pin(rf, false);
+    if (size > MAX_ADDRESS) {
+        printf("AddrLen is too long(%d), default(5)\r\n", size);
+        size = MAX_ADDRESS;
+    }
+    else if (size < 3) {
+        printf("AddrLen is too short(%d), assigned(3)\r\n", size);
+        size = 3;
+    }
+    rf->addr_len = size;
+    size -= 2;
     size &= 0x03;
     rf24_write_reg(rf, SETUP_AW, size);
 }
@@ -942,21 +956,27 @@ static void rf24_tx_addr_setting(RF24_Handle *rf, const uint8_t* tx_address)
 void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
 {
     rf->is_tx_mode = true;
-    rf24_tx_addr_setting(rf, tx_address);
 
-    // Ensure powered and set TX mode
+    // Power up and set to TX mode
     rf24_power_enable_set(rf, true);
     uint8_t config = 0;
     rf24_read_reg(rf, CONFIG_REG, &config, ONE_BYTE);
     config &= ~(1 << PRIM_RX);
     rf24_write_reg(rf, CONFIG_REG, config);
 
+    //tx on write address
+    rf24_tx_addr_setting(rf, tx_address);
+
     if (rf->is_auto_ack)
         rf24_crc_setting(rf, true, rf->crc_setting);
 
     HAL_Delay(2);
-    rf24_empty_tx_buffer(rf);
-    rf24_empty_rx_buffer(rf);
+}
+
+void rf24_tx_mode_init(RF24_Handle *rf)
+{
+    rf24_reset(rf);
+    rf24_tx_mode(rf, rf->tx_addr);
 }
 
 /**
@@ -981,33 +1001,42 @@ void rf24_standby_mode(RF24_Handle *rf)
 
 /**
  * @version 0
- * @brief rf24_empty_tx_buffer
+ * @brief rf24_flush_tx_buffer
  * @author minhnhut-n
  * @function: flush TX buffer
  */
-void rf24_empty_tx_buffer(RF24_Handle *rf)
+void rf24_flush_tx_buffer(RF24_Handle *rf)
 {
-    rf24_ce_pin(rf, false);    
     spi_beginTransaction(rf);
     uint8_t command = FLUSH_TX;
     uint8_t status;
-    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, ONE_BYTE, SPI_TIMEOUT);
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, 1, RF_SPI_TIMEOUT);
     spi_endTransaction(rf);
 }
 
 /**
  * @version 0
- * @brief rf24_empty_rx_buffer
+ * @brief rf24_flush_rx_buffer
  * @author minhnhut-n
  * @function: flush RX buffer
  */
-void rf24_empty_rx_buffer(RF24_Handle *rf)
-{
-    rf24_ce_pin(rf, false);    
+void rf24_flush_rx_buffer(RF24_Handle *rf)
+{  
     spi_beginTransaction(rf);
     uint8_t command = FLUSH_RX;
     uint8_t status;
-    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, ONE_BYTE, SPI_TIMEOUT);
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, 1, RF_SPI_TIMEOUT);
+    spi_endTransaction(rf);
+}
+
+/**
+ * This register is named ACTIVATE which is relate with FEATURE reg
+ * but for some reason this was hidden.
+ */
+void rf24_toggle_feature(RF24_Handle *rf) {
+    spi_beginTransaction(rf);
+    //activate
+    rf24_write_reg(rf, 0x50, 0x73);
     spi_endTransaction(rf);
 }
 
@@ -1021,25 +1050,58 @@ void rf24_init(RF24_Handle *rf)
 {
     printf("\n==== INIT RF24 ====\r\n");
 
-    rf24_ce_pin(rf, false);
-    spi_endTransaction(rf);
-    delay_us(20);
+    // WARNING: Delay is based on P-variant whereby non-P *may* require different timing.
+    // Refer from RF24.h (communities versions)
+    HAL_Delay(5);
 
-    rf24_reset(rf);
+    rf24_autoAck_config(rf, 4000, 5);
+    rf24_baudrate_set(rf, RF24_1MBPS);
 
-    rf->payload_size = 32; // set payload size cố định
-    rf24_autoAck_enable(rf, true); // bật auto-ack
-    rf24_autoAck_config(rf, 1500, 15);
-    rf24_crc_setting(rf, true, RF24_CRC_16);
-    rf24_addr_width_set(rf, ADDR_5_BYTE);
-    rf24_baudrate_set(rf, BAUD_1MBPS);
-    rf24_power_amp_set(rf, MAX_POWER);
-    rf24_dynamic_payLoad(rf, false); // static payload
+    uint8_t before = 0;
+    rf24_read_reg(rf, FEATURE, &before);
+    rf24_toggle_feature(rf);
+    uint8_t after = 0;
+    rf24_read_reg(rf, FEATURE, &after);
+    rf->is_p_variant = before == after;
 
+    //from communities
+    if (after) {
+        if (rf->is_p_variant) {
+            // module did not experience power-on-reset (#401)
+            rf24_toggle_feature(rf);
+        }
+        // allow use of multicast parameter and dynamic payloads by default
+        rf24_write_reg(rf, FEATURE, 0);
+    }
+
+    rf->is_auto_ack = false;
+    rf24_dynamic_payLoad(rf, false);
+    rf24_autoAck_enable(rf, true);
+    rf->payload_size = 32;
+    rf24_addr_width_set(rf, MAX_ADDRESS);
+
+    //channel by default is 76
+    rf24_channel_set(rf, 76);
+
+    rf24_clear_all_irq(rf);
+    rf24_flush_rx_buffer(rf);
+    rf24_flush_tx_buffer(rf);
+
+    // Clear CONFIG register: (from community)
+    //      Reflect all IRQ events on IRQ pin
+    //      Enable PTX
+    //      Power Up
+    //      16-bit CRC (CRC required by auto-ack)
+    // Do not write CE high so radio will remain in standby I mode
+    // PTX should use only 22uA of power
+    uint8_t info = 0x00;
+    info = (1 << EN_CRC) | (1 << CRCO);
+    rf24_write_reg(rf, CONFIG_REG, &info);
+    rf24_read_reg(rf, CONFIG_REG, rf->cfg.rf24_config_reg);
+
+    //last thing power it on
     rf24_power_enable_set(rf, true);
-    // default send command (use ACK payload by default)
-    rf->cmd_send_data = W_TX_PAYLOAD;
-    printf("Status CE pin: %d\r\n", rf->cfg.ce_status);
+
     printf("==== END INIT RF24 ====\r\n");
 }
 
@@ -1115,10 +1177,10 @@ void rf24_reset(RF24_Handle *rf) {
     rf24_write_reg(rf, DYNPD,       0x00);
     rf24_write_reg(rf, FEATURE,     0x00);
 
-    //empty fifo buffer
-    printf("rf24_reset: empty buffer\r\n");
-    rf24_empty_rx_buffer(rf);
-    rf24_empty_tx_buffer(rf);
+    //flush fifo buffer
+    printf("rf24_reset: flush buffer\r\n");
+    rf24_flush_rx_buffer(rf);
+    rf24_flush_tx_buffer(rf);
 }
 
 /**

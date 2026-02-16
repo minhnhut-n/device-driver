@@ -15,10 +15,13 @@
 #include <string.h>
 #include <stdio.h>
 
+#define RF_SPI_TIMEOUT 200
+#define MAX_ADDRESS 5
+
 #ifndef INC_RF24_LIB_H_
 #define INC_RF24_LIB_H_
 
-//PinMode
+//GPIO and SPI physical pin config
 typedef struct {
     SPI_HandleTypeDef *hspi;
 
@@ -32,6 +35,7 @@ typedef struct {
     uint8_t rf24_config_reg;
 } RF24_Config;
 
+//struct to store rf24 state
 typedef struct {
     RF24_Config cfg;
     uint8_t payload_size;
@@ -39,18 +43,23 @@ typedef struct {
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
      * that need to restore to it own pipe 0 data.
     */
+    uint8_t addr_len;
     uint8_t tx_addr[MAX_ADDRESS];
+    uint8_t pipe0_rx_addr[MAX_ADDRESS];
+    uint8_t pipe0_tx_addr[MAX_ADDRESS];
     uint8_t crc_setting;
     uint8_t cmd_send_data;
-    uint8_t pipe0_rx_addr[MAX_ADDRESS];
-    uint8_t pipe1_rx_addr[MAX_ADDRESS];
     bool is_restore_pipe0_addr;
     bool is_auto_ack;
-    bool is_tx_mode;
-    bool dynamic_pay_load;
+    bool is_pipe0_rx;
+    bool is_p_variant;
+
+    //should be set as default -> disable, and enable by function
+    bool dynamic_payload_enabled;
     bool power_state;
 } RF24_Handle;
 
+//carrier-wave strenght settings
 typedef enum
 {
     RF24_PA_MIN = 0,
@@ -60,49 +69,38 @@ typedef enum
     RF24_PA_ERROR
 } rf24_pa_dbm_e;
 
+// data rate in the air
 typedef enum
 {
-    /** (0) represents 1 Mbps */
     RF24_1MBPS = 0,
-    /** (1) represents 2 Mbps */
     RF24_2MBPS,
-    /** (2) represents 250 kbps */
     RF24_250KBPS
 } rf24_datarate_e;
 
+//crc type
 typedef enum
 {
-    /** (0) represents no CRC checksum is used */
     RF24_CRC_DISABLED = 0,
-    /** (1) represents CRC 8 bit checksum is used */
     RF24_CRC_8,
-    /** (2) represents CRC 16 bit checksum is used */
     RF24_CRC_16
 } rf24_crclength_e;
 
+//fifo enums check status
 typedef enum
 {
-    /// @brief The FIFO is not full nor empty, but it is occupied with 1 or 2 payloads.
     RF24_FIFO_OCCUPIED,
-    /// @brief The FIFO is empty.
     RF24_FIFO_EMPTY,
-    /// @brief The FIFO is full.
     RF24_FIFO_FULL,
-    /// @brief Represents corruption of data over SPI (when observed).
     RF24_FIFO_INVALID,
 } rf24_fifo_state_e;
 
+// value for setting register value
 typedef enum
 {
-    /// An alias of `0` to describe no IRQ events enabled.
     RF24_IRQ_NONE = 0,
-    /// Represents an event where TX Data Failed to send.
     RF24_TX_DF = 1 << MASK_MAX_RT,
-    /// Represents an event where TX Data Sent successfully.
     RF24_TX_DS = 1 << TX_DS,
-    /// Represents an event where RX Data is Ready to `RF24::read()`.
     RF24_RX_DR = 1 << RX_DR,
-    /// Byte to clear all interrupt on previous section
     RF24_IRQ_ALL = (1 << MASK_MAX_RT) | (1 << TX_DS) | (1 << RX_DR),
 } rf24_irq_flags_e;
 
@@ -130,8 +128,17 @@ void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, ui
 /**
  * @brief function support for reading configuration wih spi
  */
-void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
+void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer);
+/**
+ * @brief function support for reading configuration wih spi
+ */
+void rf24_read_reg_mul(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 
+/**
+ * @brief: init rf24 module
+ * @note:
+ */
+void rf24_init(RF24_Handle *rf);
 
 /**
  * @brief frame of sending step
@@ -194,14 +201,13 @@ void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address);
 void rf24_standby_mode(RF24_Handle *rf);
 
 /**
- * @brief Empty buffer TX
+ * @brief Flush buffer TX
  */
-void rf24_empty_tx_buffer(RF24_Handle *rf);
+void rf24_flush_tx_buffer(RF24_Handle *rf);
 /**
- * @brief Empty buffer RX
+ * @brief Flush buffer RX
  */
-void rf24_empty_rx_buffer(RF24_Handle *rf);
-
+void rf24_flush_rx_buffer(RF24_Handle *rf);
 /**
  * @brief Power set for rf24
  */
@@ -232,19 +238,6 @@ void rf24_pll_lock_enable(RF24_Handle *rf, bool enable);
  * @brief: CRC setting for payload transmit
  */
 void rf24_crc_setting(RF24_Handle *rf, bool state, uint8_t numCRCByte);
-
-/**
- * @brief: init rf24 module
- * @note:
- * - disable ce pin
- * - config reg to 0x00
- * - no auto ack
- * - disable rx addr
- * - channel reset to 0
- * - flush buffer (clear buffer)
- * - data rate and power reset to default (2MBps, 0dBm)
- */
-void rf24_init(RF24_Handle *rf);
 
 /**
  * @brief: reset rf24 module
