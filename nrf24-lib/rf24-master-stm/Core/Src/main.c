@@ -131,20 +131,7 @@ int main(void)
 
   //========END CONFIGURATION==========
   rf24_init(&rf_handle);
-  rf24_dump_registers(&rf_handle);
 
-  rf24_channel_set(&rf_handle, 12);
-  rf24_autoAck_enable(&rf_handle, true);
-  rf24_tx_mode(&rf_handle, tx_address);
-rf24_cmd_on_write(&rf_handle, true);  // Use W_TX_PAYLOAD_NOACK (no ACK required)
-
-// Test carrier wave functionality
-rf24_carrier_wave_enable(&rf_handle, true);
-rf24_pll_lock_enable(&rf_handle, true);
-rf24_channel_set(&rf_handle, 12);
-rf24_PA_set(&rf_handle, MAX_POWER);
-rf24_ce_pin(&rf_handle, true);  // Keep CE high for continuous carrier
-  printf("User config\r\n");
   rf24_dump_registers(&rf_handle);
 
   /* USER CODE END 2 */
@@ -156,22 +143,6 @@ rf24_ce_pin(&rf_handle, true);  // Keep CE high for continuous carrier
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-    {
-      uint8_t tx_res = rf24_transmit(&rf_handle, tx_data, sizeof(tx_data)/sizeof(tx_data[0]));
-      if (tx_res == 1) {
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-      } else if (tx_res == 2) {
-        HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
-        printf("[WARN] rf24 transmit timeout\r\n");
-      } else if (tx_res == 3) {
-        HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
-        printf("[ERR] rf24 max retries\r\n");
-      } else {
-        HAL_GPIO_TogglePin(I_LED_GPIO_Port, I_LED_Pin);
-        printf("[ERR] rf24 write failed\r\n");
-      }
-    }
 
     HAL_Delay(200);
   }
