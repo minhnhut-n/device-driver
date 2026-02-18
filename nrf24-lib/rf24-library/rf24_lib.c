@@ -67,18 +67,18 @@ static inline uint32_t convert_tick_to_us(uint32_t tick) {
     return tick/(SystemCoreClock/1e6);
 }
 
-// /**
-//  * @version 0.1
-//  * @brief software_reset
-//  * @author minhnhut-n
-//  * @function: used to reset whole system, using nvic reset,
-//  * this function is now simulate reset button on STM board
-//  */
-// static void software_reset(void)
-// {
-//     __disable_irq();        // optional nhưng nên có
-//     NVIC_SystemReset();     // reset toàn bộ hệ thống
-// }
+/**
+ * @version 0.1
+ * @brief software_reset
+ * @author minhnhut-n
+ * @function: used to reset whole system, using nvic reset,
+ * this function is now simulate reset button on STM board
+ */
+static void software_reset(void)
+{
+    __disable_irq();        // optional nhưng nên có
+    NVIC_SystemReset();     // reset toàn bộ hệ thống
+}
 
 /**
  * @version 0.1
@@ -142,9 +142,11 @@ void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, ui
  * @author minhnhut-n
  * @function: support to read single register data from nrf24.
  */
-void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer)
+int rf24_read_reg(RF24_Handle *rf, uint8_t reg)
 {
-    return rf24_read_reg_mul(rf, reg, buffer, 1);
+    uint8_t buffer = 0;
+    rf24_read_reg_mul(rf, reg, &buffer, 1);
+    return buffer;
 }
 
 /**
@@ -179,13 +181,6 @@ void rf24_read_reg_mul(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t si
  * - return true (success)
  * - return fail (something wrong that can not transmit data)
  */
-typedef enum {
-    RF24_EVT_FAIL = 0,
-    RF24_EVT_TX_OK = 1,
-    RF24_EVT_MAX_RT = 2,
-    RF24_EVT_RX_DR = 3,
-    RF24_EVT_TIMEOUT = 4
-} rf24_event_t;
 
 /**
  * @brief Analyze STATUS register and return event code; if timed_out==true
@@ -216,14 +211,11 @@ static rf24_event_t rf24_whatHappened(RF24_Handle *rf, uint8_t status, bool time
     if (timed_out) {
         // timeout diagnostics + recovery (moved from rf24_transmit)
         printf("[ERR] Transmit timeout\r\n");
-        uint8_t obs = 0;
-        rf24_read_reg(rf, OBSERVE_TX, &obs);
+        uint8_t obs = rf24_read_reg(rf, OBSERVE_TX);
         printf("[DBG] OBSERVE_TX=0x%02X\r\n", obs);
-        uint8_t cfg = 0;
-        rf24_read_reg(rf, CONFIG_REG, &cfg);
+        uint8_t cfg = rf24_read_reg(rf, CONFIG_REG);
         printf("[DBG] CONFIG=0x%02X (PRIM_RX=%d, PWR_UP=%d)\r\n", cfg, (cfg>>PRIM_RX)&1, (cfg>>PWR_UP)&1);
-        uint8_t fifo = 0;
-        rf24_read_reg(rf, FIFO_STATUS, &fifo);
+        uint8_t fifo = rf24_read_reg(rf, FIFO_STATUS);
         printf("[DBG] FIFO_STATUS=0x%02X\r\n", fifo);
         uint8_t txaddr[5] = {0};
         rf24_read_reg_mul(rf, TX_ADDR, txaddr, MAX_ADDRESS);
@@ -287,26 +279,21 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
     delay_us(20);
 
     // Diagnostic: print immediate status and FIFO after writing payload
-    uint8_t immediate_status = 0;
-    rf24_read_reg(rf, STATUS_REG, &immediate_status);
-    uint8_t immediate_fifo = 0;
-    rf24_read_reg(rf, FIFO_STATUS, &immediate_fifo);
-    uint8_t feat = 0;
-    rf24_read_reg(rf, FEATURE, &feat);
-    uint8_t en_aa = 0;
-    rf24_read_reg(rf, EN_AA, &en_aa);
+    uint8_t immediate_status = rf24_read_reg(rf, STATUS_REG);
+    uint8_t immediate_fifo = rf24_read_reg(rf, FIFO_STATUS);
+    uint8_t feat = rf24_read_reg(rf, FEATURE);
+    uint8_t en_aa = rf24_read_reg(rf, EN_AA);
     printf("[DBG] post-write STATUS=0x%02X, FIFO=0x%02X, FEATURE=0x%02X, EN_AA=0x%02X\r\n",
            immediate_status, immediate_fifo, feat, en_aa);
 
     /* Read OBSERVE_TX to get ARC and PLOS counters for diagnostics */
-    uint8_t observe = 0;
-    rf24_read_reg(rf, OBSERVE_TX, &observe);
+    uint8_t observe = rf24_read_reg(rf, OBSERVE_TX);
     uint8_t arc_cnt = observe & 0x0F;
     uint8_t plos_cnt = (observe >> 4) & 0x0F;
     printf("[DBG] OBSERVE_TX=0x%02X (ARC=%u, PLOS=%u)\r\n", observe, arc_cnt, plos_cnt);
 
     do {
-        rf24_read_reg(rf, STATUS_REG, &status);
+        status = rf24_read_reg(rf, STATUS_REG);
         if ((HAL_GetTick() - last_print) >= 50) {
             printf("[DBG] wait status=0x%02X\r\n", status);
             last_print = HAL_GetTick();
@@ -343,9 +330,9 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
             }
 
             /* Read diagnostics after re-write */
-            rf24_read_reg(rf, STATUS_REG, &immediate_status);
-            rf24_read_reg(rf, FIFO_STATUS, &immediate_fifo);
-            rf24_read_reg(rf, OBSERVE_TX, &observe);
+            immediate_status = rf24_read_reg(rf, STATUS_REG);
+            immediate_fifo = rf24_read_reg(rf, FIFO_STATUS);
+            observe = rf24_read_reg(rf, OBSERVE_TX);
             printf("[DBG] retry post-write STATUS=0x%02X, FIFO=0x%02X, OBSERVE_TX=0x%02X\r\n",
                    immediate_status, immediate_fifo, observe);
 
@@ -358,7 +345,7 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
 
             /* Wait for TX completion with shorter retry timeout */
             do {
-                rf24_read_reg(rf, STATUS_REG, &status);
+                status = rf24_read_reg(rf, STATUS_REG);
             } while (!(status & STATUS_ON_CHECK(rf->cmd_send_data)) &&
                     (HAL_GetTick() - start < TX_RETRY_TIMEOUT));
 
@@ -485,10 +472,8 @@ void rf24_read_data(RF24_Handle *rf, uint8_t* buffer, uint8_t size)
  */
 bool rf24_is_dataAvailable(RF24_Handle *rf, uint8_t pipeNum)
 {
-    uint8_t status = 0;
-    uint8_t rx_p_no = 0;
-    rf24_read_reg(rf, STATUS_REG, &status);
-    rx_p_no = (status >> RX_P_NO) & 0x07;
+    uint8_t status = rf24_read_reg(rf, STATUS_REG);
+    uint8_t rx_p_no = (status >> RX_P_NO) & 0x07;
 
     if ((status & (1 << RX_DR)) && (rx_p_no == pipeNum)) {  
         return true;
@@ -505,8 +490,7 @@ bool rf24_is_dataAvailable(RF24_Handle *rf, uint8_t pipeNum)
 bool isValid_AddrWidth(RF24_Handle *rf)
 {
     rf24_ce_pin(rf, false);    
-    uint8_t rtn = 0;
-    rf24_read_reg(rf, SETUP_AW, &rtn);
+    uint8_t rtn = rf24_read_reg(rf, SETUP_AW);
 
     rtn += 2;
     if (rtn > 2 && rtn < 6) {
@@ -526,8 +510,7 @@ bool isValid_AddrWidth(RF24_Handle *rf)
 void rf24_PA_set(RF24_Handle *rf, uint8_t level)
 {
     rf24_ce_pin(rf, false);
-    uint8_t config = 0;
-    rf24_read_reg(rf, RF_SETUP, &config);
+    uint8_t config = rf24_read_reg(rf, RF_SETUP);
 
     config &= ~((1<<1) | (1<<2));
     config |= ((level&0x03) << 1) | 0x01;
@@ -560,8 +543,7 @@ void rf24_channel_set(RF24_Handle *rf, uint8_t channel)
 void rf24_baudrate_set(RF24_Handle *rf, uint8_t baudrate)
 {
     rf24_ce_pin(rf, false);
-    uint8_t config = 0;
-    rf24_read_reg(rf, RF_SETUP, &config);
+    uint8_t config = rf24_read_reg(rf, RF_SETUP);
 
     switch (baudrate)
     {
@@ -614,10 +596,8 @@ void rf24_power_enable_set(RF24_Handle *rf, uint8_t status)
  * @function: set the strength of power amplifier from -18dBm to 0dBm
  */
 void rf24_power_amp_set(RF24_Handle *rf, uint8_t level) {
-    uint8_t rf_setup;
     rf24_ce_pin(rf, false);
-
-    rf24_read_reg(rf, RF_SETUP, &rf_setup);
+    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
     //clear all bit before set
     rf_setup &= ~(3 << 1);
     rf_setup |= (level << 1);
@@ -637,8 +617,7 @@ void rf24_crc_setting(RF24_Handle *rf, bool enable, uint8_t numCRCByte)
 
     rf->crc_setting = numCRCByte;
 
-    uint8_t config = 0;
-    rf24_read_reg(rf, CONFIG_REG, &config);
+    uint8_t config = rf24_read_reg(rf, CONFIG_REG);
     if ( enable ) {
         config |= (1 << EN_CRC);
         if (numCRCByte == 1) {
@@ -714,7 +693,7 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addr
     }
     rf24_write_reg(rf, pw_reg, value);
 
-    rf24_read_reg(rf, EN_RXADDR, &value);
+    value = rf24_read_reg(rf, EN_RXADDR);
     value |= (ENABLE << pipeNum);
     rf24_write_reg(rf, EN_RXADDR, value);
 }
@@ -729,8 +708,7 @@ void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addr
 void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
 {
     rf24_ce_pin(rf, false);    
-    uint8_t value = 0;
-    rf24_read_reg(rf, EN_RXADDR, &value);
+    uint8_t value = rf24_read_reg(rf, EN_RXADDR);
     value &= ~(ENABLE << pipeNum);
     rf24_write_reg(rf, EN_RXADDR, value);
 
@@ -796,8 +774,7 @@ void rf24_autoAck_config(RF24_Handle *rf, uint16_t ack_time, uint8_t ack_retry)
 void rf24_ack_payload(RF24_Handle *rf, bool is_ack_payload)
 {
     rf24_ce_pin(rf, false);
-    uint8_t feature = 0x00;
-    rf24_read_reg(rf, FEATURE, &feature);
+    uint8_t feature = rf24_read_reg(rf, FEATURE);
 
     if (is_ack_payload) {
         feature |= (1 << EN_ACK_PAY);
@@ -858,18 +835,17 @@ void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack)
 {
     rf24_ce_pin(rf, false);
 
-    uint8_t feature = 0x00;
-    rf24_read_reg(rf, FEATURE, &feature);
+    uint8_t feature = rf24_read_reg(rf, FEATURE);
     if (feature == 0x00) {
         spi_beginTransaction(rf);
         uint8_t cmd[2] = {0x50, 0x73}; // ACTIVATE sequence
         uint8_t status;
         HAL_SPI_TransmitReceive(rf->cfg.hspi, cmd, &status, 2, RF_SPI_TIMEOUT);
         spi_endTransaction(rf);
-        rf24_read_reg(rf, FEATURE, &feature);
+        feature = rf24_read_reg(rf, FEATURE);
     }
 
-    rf24_read_reg(rf, FEATURE, &feature);
+    feature = rf24_read_reg(rf, FEATURE);
     if (write_with_ack) {
         rf->cmd_send_data = W_PAY_LOAD;
         feature &= ~(1 << EN_DYN_ACK);
@@ -896,7 +872,7 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
 
     //enable address pipe
     rf24_pipeData_rx_open(rf, pipeNum, addressRX);
-    rf24_read_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg);
+    rf->cfg.rf24_config_reg = rf24_read_reg(rf, CONFIG_REG);
 
     rf->cfg.rf24_config_reg |= (1 << PRIM_RX);
     if (  !(rf->cfg.rf24_config_reg & (1 << PWR_UP)) ) {
@@ -941,8 +917,7 @@ void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
 
     // Power up and set to TX mode
     rf24_power_enable_set(rf, true);
-    uint8_t config = 0;
-    rf24_read_reg(rf, CONFIG_REG, &config);
+    uint8_t config = rf24_read_reg(rf, CONFIG_REG);
     config &= ~(1 << PRIM_RX);
     rf24_write_reg(rf, CONFIG_REG, config);
 
@@ -970,7 +945,7 @@ void rf24_tx_mode_init(RF24_Handle *rf)
 void rf24_standby_mode(RF24_Handle *rf)
 {
     rf24_ce_pin(rf, false);
-    rf24_read_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg);
+    rf->cfg.rf24_config_reg = rf24_read_reg(rf, CONFIG_REG);
 
     if ( !(rf->cfg.rf24_config_reg & (1 << PWR_UP)) ) {
         rf->cfg.rf24_config_reg |= (1 << PWR_UP);
@@ -1009,6 +984,12 @@ void rf24_flush_rx_buffer(RF24_Handle *rf)
     spi_endTransaction(rf);
 }
 
+
+bool rf24_isChipConnected(RF24_Handle *rf) {
+    uint8_t addr_width = rf24_read_reg(rf, SETUP_AW);
+    return (addr_width == (rf->addr_len - 2) ? 1 : 0);
+}
+
 /**
  * This register is named ACTIVATE which is relate with FEATURE reg
  * but for some reason this was hidden.
@@ -1021,14 +1002,26 @@ void rf24_toggle_feature(RF24_Handle *rf) {
 }
 
 /**
- * @version 0
+ * @version 0.1
  * @brief rf24_init
  * @author minhnhut-n
  * @function: all we know, that is init
  */
 void rf24_init(RF24_Handle *rf)
 {
-    printf("\n==== INIT RF24 ====\r\n");
+    rf24_init_pins(rf);
+    rf24_init_radio(rf);
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_init
+ * @author minhnhut-n
+ * @function: all we know, that is init
+ */
+void rf24_init_radio(RF24_Handle *rf)
+{
+    printf("\n==== INIT RF24 RADIO ====\r\n");
 
     // WARNING: Delay is based on P-variant whereby non-P *may* require different timing.
     // Refer from RF24.h (communities versions)
@@ -1037,11 +1030,9 @@ void rf24_init(RF24_Handle *rf)
     rf24_autoAck_config(rf, 4000, 5);
     rf24_baudrate_set(rf, RF24_1MBPS);
 
-    uint8_t before = 0;
-    rf24_read_reg(rf, FEATURE, &before);
+    uint8_t before = rf24_read_reg(rf, FEATURE);
     rf24_toggle_feature(rf);
-    uint8_t after = 0;
-    rf24_read_reg(rf, FEATURE, &after);
+    uint8_t after = rf24_read_reg(rf, FEATURE);
     rf->is_p_variant = before == after;
 
     //from communities
@@ -1077,10 +1068,26 @@ void rf24_init(RF24_Handle *rf)
     uint8_t info = 0x00;
     info = (1 << EN_CRC) | (1 << CRCO);
     rf24_write_reg(rf, CONFIG_REG, info);
-    rf24_read_reg(rf, CONFIG_REG, &rf->cfg.rf24_config_reg);
+    rf->cfg.rf24_config_reg = rf24_read_reg(rf, CONFIG_REG);
 
     //last thing power it on
     rf24_power_enable_set(rf, true);
+
+    printf("==== END INIT RF24 ====\r\n");
+}
+/**
+ * @version 0.1
+ * @brief rf24_init
+ * @author minhnhut-n
+ * @function: all we know, that is init
+ */
+void rf24_init_pins(RF24_Handle *rf)
+{
+    printf("==== INIT RF24 PINS ====\r\n");
+
+    rf24_ce_pin(rf, true);
+    spi_endTransaction(rf);
+    HAL_Delay(50);
 
     printf("==== END INIT RF24 ====\r\n");
 }
@@ -1093,8 +1100,7 @@ void rf24_init(RF24_Handle *rf)
  */
 void rf24_carrier_wave_enable(RF24_Handle *rf, bool enable) {
     rf24_ce_pin(rf, false);
-    uint8_t rf_setup;
-    rf24_read_reg(rf, RF_SETUP, &rf_setup);
+    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
 
     if (enable) {
         rf_setup |= (1 << CONT_WAVE);
@@ -1112,8 +1118,7 @@ void rf24_carrier_wave_enable(RF24_Handle *rf, bool enable) {
  */
 void rf24_pll_lock_enable(RF24_Handle *rf, bool enable) {
     rf24_ce_pin(rf, false);
-    uint8_t rf_setup;
-    rf24_read_reg(rf, RF_SETUP, &rf_setup);
+    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
 
     if (enable) {
         rf_setup |= (1 << PLL_LOCK);
@@ -1178,29 +1183,23 @@ void rf24_reset(RF24_Handle *rf) {
 void print_tc_function(RF24_Handle *rf, uint8_t pipeNum)
 {
     printf("\n==>> Test function <<==\r\n");
-    uint8_t check = 0;
-    rf24_read_reg(rf, CONFIG_REG, &check);
+    uint8_t check = rf24_read_reg(rf, CONFIG_REG);
     printf("Value: %02X\r\n", check);
 
     printf("==>> AutoACK mode <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, EN_AA, &check);
-
+    check = rf24_read_reg(rf, EN_AA);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Address config <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, SETUP_AW, &check);
+    check = rf24_read_reg(rf, SETUP_AW);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Channel config <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, RF_CH, &check);
+    check = rf24_read_reg(rf, RF_CH);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Baudrate config <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, RF_SETUP, &check);
+    check = rf24_read_reg(rf, RF_SETUP);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Pipe Address	<<==\r\n");
@@ -1220,28 +1219,23 @@ void print_tc_function(RF24_Handle *rf, uint8_t pipeNum)
 void print_state_init(RF24_Handle *rf, uint8_t pipeNum)
 {
     printf("\n==>> Standby mode <<==\r\n");
-    uint8_t check = 0;
-    rf24_read_reg(rf, CONFIG_REG, &check);
+    uint8_t check = rf24_read_reg(rf, CONFIG_REG);
     printf("Value: %02X\r\n", check);
 
     printf("==>> AutoACK mode <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, EN_AA, &check);
+    check = rf24_read_reg(rf, EN_AA);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Address config <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, SETUP_AW, &check);
+    check = rf24_read_reg(rf, SETUP_AW);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Channel config <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, RF_CH, &check);
+    check = rf24_read_reg(rf, RF_CH);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Baudrate config <<==\r\n");
-    check = 0;
-    rf24_read_reg(rf, RF_SETUP, &check);
+    check = rf24_read_reg(rf, RF_SETUP);
     printf("Value: %02X\r\n", check);
 
     printf("==>> Pipe Address	<<==\r\n");
@@ -1265,34 +1259,34 @@ void rf24_dump_registers(RF24_Handle *rf)
 
     printf("\r\n========== nRF24L01 REGISTER DUMP ==========\r\n");
 
-    rf24_read_reg(rf, CONFIG_REG, &v);
+    v = rf24_read_reg(rf, CONFIG_REG);
     printf("CONFIG        : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, EN_AA, &v);
+    v = rf24_read_reg(rf, EN_AA);
     printf("EN_AA         : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, EN_RXADDR, &v);
+    v = rf24_read_reg(rf, EN_RXADDR);
     printf("EN_RX_ADDR    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, SETUP_AW, &v);
+    v = rf24_read_reg(rf, SETUP_AW);
     printf("SETUP_AW      : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, SETUP_RETR, &v);
+    v = rf24_read_reg(rf, SETUP_RETR);
     printf("SETUP_RETR    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, RF_CH, &v);
+    v = rf24_read_reg(rf, RF_CH);
     printf("RF_CH         : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, RF_SETUP, &v);
+    v = rf24_read_reg(rf, RF_SETUP);
     printf("RF_SETUP      : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, STATUS_REG, &v);
+    v = rf24_read_reg(rf, STATUS_REG);
     printf("STATUS        : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, OBSERVE_TX, &v);
+    v = rf24_read_reg(rf, OBSERVE_TX);
     printf("OBSERVE_TX    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, RPD, &v);
+    v = rf24_read_reg(rf, RPD);
     printf("RPD           : 0x%02X\r\n", v);
 
     rf24_read_reg_mul(rf, RX_PIPE_ADDR_0, buf, 5);
@@ -1305,16 +1299,16 @@ void rf24_dump_registers(RF24_Handle *rf)
     for (int i = 0; i < 5; i++) printf("%02X ", buf[i]);
     printf("\r\n");
 
-    rf24_read_reg(rf, RX_PIPE_ADDR_2, &v);
+    v = rf24_read_reg(rf, RX_PIPE_ADDR_2);
     printf("RX_ADDR_P2    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, RX_PIPE_ADDR_3, &v);
+    v = rf24_read_reg(rf, RX_PIPE_ADDR_3);
     printf("RX_ADDR_P3    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, RX_PIPE_ADDR_4, &v);
+    v = rf24_read_reg(rf, RX_PIPE_ADDR_4);
     printf("RX_ADDR_P4    : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, RX_PIPE_ADDR_5, &v);
+    v = rf24_read_reg(rf, RX_PIPE_ADDR_5);
     printf("RX_ADDR_P5    : 0x%02X\r\n", v);
 
     rf24_read_reg_mul(rf, TX_ADDR, buf, 5);
@@ -1322,31 +1316,31 @@ void rf24_dump_registers(RF24_Handle *rf)
     for (int i = 0; i < 5; i++) printf("%02X ", buf[i]);
     printf("\r\n");
 
-    rf24_read_reg(rf, RX_PW_P0, &v);
+    v = rf24_read_reg(rf, RX_PW_P0);
     printf("RX_PW_P0      : %d\r\n", v);
 
-    rf24_read_reg(rf, RX_PW_P1, &v);
+    v = rf24_read_reg(rf, RX_PW_P1);
     printf("RX_PW_P1      : %d\r\n", v);
 
-    rf24_read_reg(rf, RX_PW_P2, &v);
+    v = rf24_read_reg(rf, RX_PW_P2);
     printf("RX_PW_P2      : %d\r\n", v);
 
-    rf24_read_reg(rf, RX_PW_P3, &v);
+    v = rf24_read_reg(rf, RX_PW_P3);
     printf("RX_PW_P3      : %d\r\n", v);
 
-    rf24_read_reg(rf, RX_PW_P4, &v);
+    v = rf24_read_reg(rf, RX_PW_P4);
     printf("RX_PW_P4      : %d\r\n", v);
 
-    rf24_read_reg(rf, RX_PW_P5, &v);
+    v = rf24_read_reg(rf, RX_PW_P5);
     printf("RX_PW_P5      : %d\r\n", v);
 
-    rf24_read_reg(rf, FIFO_STATUS, &v);
+    v = rf24_read_reg(rf, FIFO_STATUS);
     printf("FIFO_STATUS   : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, DYNPD, &v);
+    v = rf24_read_reg(rf, DYNPD);
     printf("DYNPD         : 0x%02X\r\n", v);
 
-    rf24_read_reg(rf, FEATURE, &v);
+    v = rf24_read_reg(rf, FEATURE);
     printf("FEATURE       : 0x%02X\r\n", v);
 
     printf("===========================================\r\n");

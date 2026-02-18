@@ -104,6 +104,13 @@ typedef enum
     RF24_IRQ_ALL = (1 << MASK_MAX_RT) | (1 << TX_DS) | (1 << RX_DR),
 } rf24_irq_flags_e;
 
+typedef enum {
+    RF24_EVT_FAIL = 0,
+    RF24_EVT_TX_OK = 1,
+    RF24_EVT_MAX_RT = 2,
+    RF24_EVT_RX_DR = 3,
+    RF24_EVT_TIMEOUT = 4
+} rf24_event_t;
 
 /**
  * @brief helper function for stm32-spi purpose
@@ -128,12 +135,22 @@ void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, ui
 /**
  * @brief function support for reading configuration wih spi
  */
-void rf24_read_reg(RF24_Handle *rf, uint8_t reg, uint8_t* buffer);
+int rf24_read_reg(RF24_Handle *rf, uint8_t reg);
 /**
  * @brief function support for reading configuration wih spi
  */
 void rf24_read_reg_mul(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
 
+/**
+ * @brief: init rf24 radio init
+ * @note:
+ */
+void rf24_init_radio(RF24_Handle *rf);
+/**
+ * @brief: init rf24 module pins (CE, CSN)
+ * @note:
+ */
+void rf24_init_pins(RF24_Handle *rf);
 /**
  * @brief: init rf24 module
  * @note:
