@@ -857,6 +857,15 @@ void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack)
     rf24_write_reg(rf, FEATURE, feature);
 }
 
+static void rf24_closeRxPipe(RF24_Handle *rf, uint8_t pipe_num) {
+    uint8_t pipe_en = rf24_read_reg(rf, EN_RXADDR);
+    rf24_write_reg(rf, EN_RXADDR, pipe_en & ~(1 << pipe_num));
+
+    if (pipe_num == 0) {
+        rf->is_pipe0_rx = false;
+    }
+}
+
 /**
  * @version 0
  * @brief rf24_rx_mode
@@ -865,22 +874,23 @@ void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack)
  */
 void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
 {
-    printf("RX Mode");
-
-    rf->is_pipe0_rx = true;
-    rf24_ce_pin(rf, false);
-
-    //enable address pipe
-    rf24_pipeData_rx_open(rf, pipeNum, addressRX);
-    rf->cfg.rf24_config_reg = rf24_read_reg(rf, CONFIG_REG);
-
     rf->cfg.rf24_config_reg |= (1 << PRIM_RX);
-    if (  !(rf->cfg.rf24_config_reg & (1 << PWR_UP)) ) {
-        rf->cfg.rf24_config_reg |= (1 << PWR_UP);
+    rf24_write_reg(rf, CONFIG_REG, rf->cfg.rf24_config_reg);
+
+    rf24_clear_all_irq(rf);
+    rf24_ce_pin(rf, true);
+
+    // https://github.com/nRF24/RF24/issues/671
+    // if previously pipe 0 is used to received package, it should be restore as user intentionally used.
+    // otherwise we should avoid to use pipe 0 for listening packets. in case of we have a chain of rf24 communicate
+    // the information is sent through among rf24 modules.
+    if (rf->is_pipe0_rx) {
+        rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rf->pipe0_rx_addr, rf->addr_len);
+    }
+    else {
+        rf24_closeRxPipe(rf, 0);
     }
 
-    rf24_write_reg(rf, CONFIG_REG, rf->cfg.rf24_config_reg);
-    rf24_ce_pin(rf, true);
 }
 
 /**
@@ -1012,7 +1022,6 @@ void rf24_init(RF24_Handle *rf)
     rf24_init_pins(rf);
     rf24_init_radio(rf);
 }
-
 /**
  * @version 0.1
  * @brief rf24_init
