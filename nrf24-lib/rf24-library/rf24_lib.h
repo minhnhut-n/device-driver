@@ -55,6 +55,7 @@ typedef struct {
     bool is_p_variant;
 
     //should be set as default -> disable, and enable by function
+    bool is_ack_payload_enabled;
     bool dynamic_payload_enabled;
     bool power_state;
 } RF24_Handle;
@@ -122,7 +123,10 @@ void spi_beginTransaction(RF24_Handle *rf);
  * in this function, csn (chip select pin will go high to disable transmission)
  */
 void spi_endTransaction(RF24_Handle *rf);
-
+/**
+ * @brief check whether data is ready to read
+ */
+bool rf24_is_data_available(RF24_Handle *rf);
 /**
  * @brief function support for writing configuration wih spi
  */
@@ -131,7 +135,6 @@ void rf24_write_reg(RF24_Handle *rf, uint8_t reg, uint8_t regData);
  * @brief function support for writing configuration wih spi
  */
 void rf24_write_reg_mul(RF24_Handle *rf, uint8_t reg, const uint8_t* regData, uint8_t size);
-
 /**
  * @brief function support for reading configuration wih spi
  */
@@ -140,7 +143,10 @@ int rf24_read_reg(RF24_Handle *rf, uint8_t reg);
  * @brief function support for reading configuration wih spi
  */
 void rf24_read_reg_mul(RF24_Handle *rf, uint8_t reg, uint8_t* buffer, uint8_t size);
-
+/**
+ * @brief: only 1 address that RF24 can send and auto ack at a time
+ */
+void rf24_tx_to_addr(RF24_Handle *rf, uint8_t *value, uint8_t size);
 /**
  * @brief: init rf24 radio init
  * @note:
@@ -156,15 +162,14 @@ void rf24_init_pins(RF24_Handle *rf);
  * @note:
  */
 void rf24_init(RF24_Handle *rf);
-
 /**
  * @brief frame of sending step
  */
-uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size);
+uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool ack_pay_required);
 /**
  * @brief function support for writing user data wih spi
  */
-uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size);
+uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool ack_pay_required);
 
 /**
  * @brief function support for reading user data wih spi
@@ -190,11 +195,7 @@ void rf24_ce_pin(RF24_Handle *rf, bool status);
 /**
  * Open pipe data for reading
  */
-void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addressRX);
-/**
- * Close pipe data for reading
- */
-void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum);
+void rf24_rx_pipe_open(RF24_Handle *rf, uint8_t pipeNum, uint64_t address);
 /**
  * Registry for TX tunnel prepare for writing
  */

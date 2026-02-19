@@ -247,194 +247,6 @@ static rf24_event_t rf24_whatHappened(RF24_Handle *rf, uint8_t status, bool time
 
 /**
  * @version 0.1
- * @brief rf24_transmit
- * @author minhnhut-n
- * @function: user-api to send the data
- */
-uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
-{
-    printf("Transmit data: ");
-    for (int i = 0; i < size; i++) {
-        printf("%02X ", buffer[i]);
-    }
-    printf("\r\n");
-
-    rf24_tx_mode(rf, rf->tx_addr);
-
-    uint8_t write_ok = rf24_write_data(rf, buffer, size);
-    if (!write_ok) {
-        rf24_clear_all_irq(rf);
-        rf24_flush_tx_buffer(rf);
-        rf24_flush_rx_buffer(rf);
-        return 0; // write failed
-    }
-
-    uint8_t status = 0;
-    uint32_t start = HAL_GetTick();
-    const uint32_t timeout = 500; // milliseconds (extended for diagnostics)
-    uint32_t last_print = start;
-
-    /* Raise CE to start transmission and keep it high while waiting */
-    rf24_ce_pin(rf, true);
-    delay_us(20);
-
-    // Diagnostic: print immediate status and FIFO after writing payload
-    uint8_t immediate_status = rf24_read_reg(rf, STATUS_REG);
-    uint8_t immediate_fifo = rf24_read_reg(rf, FIFO_STATUS);
-    uint8_t feat = rf24_read_reg(rf, FEATURE);
-    uint8_t en_aa = rf24_read_reg(rf, EN_AA);
-    printf("[DBG] post-write STATUS=0x%02X, FIFO=0x%02X, FEATURE=0x%02X, EN_AA=0x%02X\r\n",
-           immediate_status, immediate_fifo, feat, en_aa);
-
-    /* Read OBSERVE_TX to get ARC and PLOS counters for diagnostics */
-    uint8_t observe = rf24_read_reg(rf, OBSERVE_TX);
-    uint8_t arc_cnt = observe & 0x0F;
-    uint8_t plos_cnt = (observe >> 4) & 0x0F;
-    printf("[DBG] OBSERVE_TX=0x%02X (ARC=%u, PLOS=%u)\r\n", observe, arc_cnt, plos_cnt);
-
-    do {
-        status = rf24_read_reg(rf, STATUS_REG);
-        if ((HAL_GetTick() - last_print) >= 50) {
-            printf("[DBG] wait status=0x%02X\r\n", status);
-            last_print = HAL_GetTick();
-        }
-    } while (!(status & STATUS_ON_CHECK(rf->cmd_send_data)) && (HAL_GetTick() - start < timeout));
-
-    // Check why we exited the wait loop
-    bool timed_out = !(status & STATUS_ON_CHECK(rf->cmd_send_data));
-
-    if (timed_out) {
-        uint32_t elapsed = HAL_GetTick() - start;
-        printf("[DBG] transmit wait elapsed=%lu ms, final STATUS=0x%02X, expected_mask=0x%02X\r\n",
-               (unsigned long)elapsed, status, (unsigned int)STATUS_ON_CHECK(rf->cmd_send_data));
-    }
-
-    // Clear CE now that we finished waiting (success, max-rt or timeout)
-    rf24_ce_pin(rf, false);
-
-    // Retry logic: if timeout, attempt retry before recovery
-    if (timed_out) {
-        for (int retry_attempt = 0; retry_attempt < TX_MAX_RETRIES; retry_attempt++) {
-            printf("[DBG] TX retry attempt %d/%d\r\n", retry_attempt + 1, TX_MAX_RETRIES);
-
-            /* Clean up and re-attempt transmission */
-            rf24_clear_all_irq(rf);
-            rf24_flush_tx_buffer(rf);
-            HAL_Delay(10);
-
-            /* Re-write payload */
-            write_ok = rf24_write_data(rf, buffer, size);
-            if (!write_ok) {
-                printf("[DBG] TX retry: write_data failed\r\n");
-                continue;
-            }
-
-            /* Read diagnostics after re-write */
-            immediate_status = rf24_read_reg(rf, STATUS_REG);
-            immediate_fifo = rf24_read_reg(rf, FIFO_STATUS);
-            observe = rf24_read_reg(rf, OBSERVE_TX);
-            printf("[DBG] retry post-write STATUS=0x%02X, FIFO=0x%02X, OBSERVE_TX=0x%02X\r\n",
-                   immediate_status, immediate_fifo, observe);
-
-            /* Raise CE and wait with shorter timeout for retry */
-            rf24_ce_pin(rf, true);
-            delay_us(20);
-
-            start = HAL_GetTick();
-            status = 0;
-
-            /* Wait for TX completion with shorter retry timeout */
-            do {
-                status = rf24_read_reg(rf, STATUS_REG);
-            } while (!(status & STATUS_ON_CHECK(rf->cmd_send_data)) &&
-                    (HAL_GetTick() - start < TX_RETRY_TIMEOUT));
-
-            rf24_ce_pin(rf, false);
-
-            timed_out = !(status & STATUS_ON_CHECK(rf->cmd_send_data));
-            uint32_t retry_elapsed = HAL_GetTick() - start;
-            printf("[DBG] retry wait elapsed=%lu ms, STATUS=0x%02X, success=%d\r\n",
-                   (unsigned long)retry_elapsed, status, !timed_out);
-
-            if (!timed_out) {
-                printf("[DBG] TX retry successful!\r\n");
-                break; // Retry succeeded, exit retry loop
-            }
-        }
-    }
-
-    // Delegate status handling and timed-out diagnostics/recovery to rf24_whatHappened
-    rf24_event_t evt = rf24_whatHappened(rf, status, timed_out);
-
-    rf24_clear_all_irq(rf);
-    rf24_flush_tx_buffer(rf);
-    rf24_flush_rx_buffer(rf);
-
-    if (timed_out && evt == RF24_EVT_TIMEOUT) {
-        return 2; // timeout
-    }
-
-    if (evt == RF24_EVT_TX_OK || evt == RF24_EVT_RX_DR) {
-        return 1;
-    } else if (evt == RF24_EVT_MAX_RT) {
-        return 3;
-    }
-
-    return 0;
-}
-
-/**
- * @version 0.1
- * @brief rf24_write_data
- * @author minhnhut-n
- * @function: child process to write data into register
- */
-uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
-{
-    //pre-processsing data
-	uint8_t payloadTX[ONE_SECTION_BUF] = {0};
-    if (rf->dynamic_payload_enabled) {
-        if (rf->payload_size == 0) {
-            printf("[ERR] Wrong payload size setting!!\r\n");
-            return 0;
-        }
-        size = MINVALUE(size, ONE_SECTION_BUF);
-    	memcpy(payloadTX, buffer, size);
-    } else {
-        memset(payloadTX, 0, ONE_SECTION_BUF);
-    	memcpy(payloadTX, buffer, size);
-        size = ONE_SECTION_BUF;
-    }
-
-
-    uint8_t status_reg, dump;
-    //condition on write data
-    rf24_ce_pin(rf, false);
-    //spi transmission set
-    spi_beginTransaction(rf);
-    uint8_t cmd = rf->cmd_send_data;
-
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status_reg, 1, RF_SPI_TIMEOUT) != HAL_OK) {
-        printf("[ERR] write fail: %02X \r\n", cmd);
-        spi_endTransaction(rf);
-        return 0;
-    }
-
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, payloadTX, &dump, size, RF_SPI_TIMEOUT) != HAL_OK) {
-        printf("[ERR] data sending\r\n");
-        spi_endTransaction(rf);
-        return 0;
-    }
-    spi_endTransaction(rf);
-
-    // Do not toggle CE here. Let caller (rf24_transmit) control CE so it can
-    // remain high while waiting for TX_DS/MAX_RT. This prevents premature
-    // lowering of CE which may reduce successful transmissions.
-    return 1;
-}
-
-/**
- * @version 0.1
  * @brief rf24_read_data
  * @author minhnhut-n
  * @function: used to read buffer from nrf24 with multiple bytes.
@@ -648,78 +460,6 @@ void rf24_ce_pin(RF24_Handle *rf, bool status)
 
 /**
  * @version 0.1
- * @brief rf24_pipeData_rx_open
- * @author minhnhut-n
- * @function: for receiver application, open specific pipe to receive data
- */
-void rf24_pipeData_rx_open(RF24_Handle *rf, uint8_t pipeNum, const uint8_t* addressRX)
-{
-    rf24_ce_pin(rf, false);    
-    if (pipeNum == 0) {
-        // recover address on pipe 0 (RX)
-        memcpy(rf->pipe0_rx_addr, addressRX, MAX_ADDRESS);
-        rf->is_restore_pipe0_addr = true;
-    }
-
-    //Due to PIPE 2->5, share 4 bytes address with PIPE1 (same)
-    //It must be edit 1 LSB for address.
-    //PIPE0 share address with TX_PIPE,
-    //It must be not overwrite on TX_PIPE_ADDR when it is in TX mode
-    uint8_t targetPipeAddr = pipeAddr[pipeNum];
-    uint8_t value = 0;
-
-    if (pipeNum <= 5) {
-        //from pipe2 to pipe 5
-        if (pipeNum >= 2) {
-            //copy 4 others first byte to PIPE1 address
-            uint8_t currAddr[MAX_ADDRESS] = {0};
-            memcpy(currAddr, addressRX, MAX_ADDRESS);
-            uint8_t addr = currAddr[MAX_ADDRESS-1];
-            currAddr[MAX_ADDRESS-1] = 0;
-            rf24_read_reg_mul(rf, RX_PIPE_ADDR_1, currAddr, MAX_ADDRESS);
-            rf24_write_reg(rf, targetPipeAddr, addr);
-        }
-        else if (pipeNum == 1 || rf->is_pipe0_rx) {
-            rf24_write_reg_mul(rf, targetPipeAddr, addressRX, MAX_ADDRESS);
-        }
-    }
-
-    // Set payload width for the pipe
-    uint8_t pw_reg = RX_PW_P0 + pipeNum;
-    if (rf->dynamic_payload_enabled) {
-        value = rf->payload_size; // Dynamic payload size
-    } else {
-        value = ONE_SECTION_BUF; // Static payload size
-    }
-    rf24_write_reg(rf, pw_reg, value);
-
-    value = rf24_read_reg(rf, EN_RXADDR);
-    value |= (ENABLE << pipeNum);
-    rf24_write_reg(rf, EN_RXADDR, value);
-}
-
-/**
- * @version 0.1
- * @brief rf24_pipeData_rx_close
- * @author minhnhut-n
- * @function: for receiver application, close specific pipe to stop receiving data
- * (use in case of unwanted data on specific pipe)
- */
-void rf24_pipeData_rx_close(RF24_Handle *rf, uint8_t pipeNum)
-{
-    rf24_ce_pin(rf, false);    
-    uint8_t value = rf24_read_reg(rf, EN_RXADDR);
-    value &= ~(ENABLE << pipeNum);
-    rf24_write_reg(rf, EN_RXADDR, value);
-
-    if (pipeNum == 0) {
-        // keep track of pipe 0's RX state to avoid null vs 0 in addr cache
-        rf->is_restore_pipe0_addr = false;
-    }
-}
-
-/**
- * @version 0.1
  * @brief rf24_autoAck_enable
  * @author minhnhut-n
  * @function: auto-ack for 2 ways verifing and sending data (high reliable) 
@@ -856,7 +596,272 @@ void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack)
     }
     rf24_write_reg(rf, FEATURE, feature);
 }
+/**
+ * @version 0.1
+ * @brief rf24_standby_mode
+ * @author minhnhut-n
+ * @function: switch mode into standby mode (in case need power saving or idle state)
+ */
+void rf24_standby_mode(RF24_Handle *rf)
+{
+    rf24_ce_pin(rf, false);
+    rf->cfg.rf24_config_reg = rf24_read_reg(rf, CONFIG_REG);
 
+    if ( !(rf->cfg.rf24_config_reg & (1 << PWR_UP)) ) {
+        rf->cfg.rf24_config_reg |= (1 << PWR_UP);
+        rf24_write_reg(rf, CONFIG_REG, rf->cfg.rf24_config_reg);
+    }
+    HAL_Delay(1);
+}
+/**
+ * @version 0
+ * @brief rf24_flush_tx_buffer
+ * @author minhnhut-n
+ * @function: flush TX buffer
+ */
+void rf24_flush_tx_buffer(RF24_Handle *rf)
+{
+    spi_beginTransaction(rf);
+    uint8_t command = FLUSH_TX;
+    uint8_t status;
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, 1, RF_SPI_TIMEOUT);
+    spi_endTransaction(rf);
+}
+/**
+ * @version 0
+ * @brief rf24_flush_rx_buffer
+ * @author minhnhut-n
+ * @function: flush RX buffer
+ */
+void rf24_flush_rx_buffer(RF24_Handle *rf)
+{  
+    spi_beginTransaction(rf);
+    uint8_t command = FLUSH_RX;
+    uint8_t status;
+    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, 1, RF_SPI_TIMEOUT);
+    spi_endTransaction(rf);
+}
+
+
+
+
+
+
+/**
+ * @version 0
+ * @brief rf24_carrier_wave_enable
+ * @author minhnhut-n
+ * @function: enable/disable continuous carrier wave output
+ */
+void rf24_carrier_wave_enable(RF24_Handle *rf, bool enable) {
+    rf24_ce_pin(rf, false);
+    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
+
+    if (enable) {
+        rf_setup |= (1 << CONT_WAVE);
+    } else {
+        rf_setup &= ~(1 << CONT_WAVE);
+    }
+    rf24_write_reg(rf, RF_SETUP, rf_setup);
+}
+/**
+ * @version 0
+ * @brief rf24_pll_lock_enable
+ * @author minhnhut-n
+ * @function: enable/disable PLL lock for carrier wave stability
+ */
+void rf24_pll_lock_enable(RF24_Handle *rf, bool enable) {
+    rf24_ce_pin(rf, false);
+    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
+
+    if (enable) {
+        rf_setup |= (1 << PLL_LOCK);
+    } else {
+        rf_setup &= ~(1 << PLL_LOCK);
+    }
+    rf24_write_reg(rf, RF_SETUP, rf_setup);
+}
+/**
+ * @brief: check chip connect base on address have assigned.
+ */
+bool rf24_isChipConnected(RF24_Handle *rf) {
+    uint8_t addr_width = rf24_read_reg(rf, SETUP_AW);
+    return (addr_width == (rf->addr_len - 2) ? 1 : 0);
+}
+
+
+/**
+ * @version 0.1
+ * @brief rf24_transmit
+ * @author minhnhut-n
+ * @function: user-api to send the data
+ */
+uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool ack_pay_required)
+{
+    uint8_t write_ok = rf24_write_data(rf, buffer, size, ack_pay_required);
+    if (!write_ok) {
+        rf24_clear_all_irq(rf);
+        rf24_flush_tx_buffer(rf);
+        rf24_flush_rx_buffer(rf);
+        return 0; // write failed
+    }
+
+    uint8_t status_reg = rf24_read_reg(rf, STATUS_REG);
+    uint32_t start = HAL_GetTick(); //ms
+
+    // TX_DS : FIFO TX interrupt (package sent/ ack received(if ack enabled))
+    // TX_DF : reach MAX retransmit times, need to reset
+    // Need to finished soon (< 100us) estimate
+    while (status_reg != (RF24_TX_DS | RF24_TX_DF)) {
+        //not response
+        if (HAL_GetTick - start > 100) {
+            printf("Asserted as fail!\r\n");
+            return 0;
+        }
+    }
+
+    rf24_ce_pin(rf, false);
+    rf24_clear_all_irq(rf);
+
+    if (status_reg & RF24_TX_DF) {
+        printf("Max reties \r\n");
+        rf24_flush_tx_buffer(rf);
+        return 0;
+    }
+
+    return 1;
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_write_data
+ * @author minhnhut-n
+ * @function: child process to write data into register
+ */
+uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
+{
+    //pre-processsing data
+	uint8_t payloadTX[ONE_SECTION_BUF] = {0};
+    if (rf->dynamic_payload_enabled) {
+        if (rf->payload_size == 0) {
+            printf("[ERR] Wrong payload size setting!!\r\n");
+            return 0;
+        }
+        size = MINVALUE(size, ONE_SECTION_BUF);
+    	memcpy(payloadTX, buffer, size);
+    } else {
+        memset(payloadTX, 0, ONE_SECTION_BUF);
+    	memcpy(payloadTX, buffer, size);
+        size = ONE_SECTION_BUF;
+    }
+
+
+    uint8_t status_reg, dump;
+    //condition on write data
+    rf24_ce_pin(rf, false);
+    //spi transmission set
+    spi_beginTransaction(rf);
+    uint8_t cmd = rf->cmd_send_data;
+
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status_reg, 1, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("[ERR] write fail: %02X \r\n", cmd);
+        spi_endTransaction(rf);
+        return 0;
+    }
+
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, payloadTX, &dump, size, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("[ERR] data sending\r\n");
+        spi_endTransaction(rf);
+        return 0;
+    }
+    spi_endTransaction(rf);
+
+    // Do not toggle CE here. Let caller (rf24_transmit) control CE so it can
+    // remain high while waiting for TX_DS/MAX_RT. This prevents premature
+    // lowering of CE which may reduce successful transmissions.
+    return 1;
+}
+/**
+ * @brief: check whether data is ready to read
+ */
+bool rf24_is_data_available(RF24_Handle *rf) {
+    return (rf24_read_reg(rf, FIFO_STATUS) & 0x01) == 0;
+}
+/**
+ * @brief: only 1 address that RF24 can send and auto ack at a time
+ */
+void rf24_tx_to_addr(RF24_Handle *rf, uint8_t *value, uint8_t size) {
+    if (size < 3 || size > 5) return;
+    // address setting for tx
+    memcpy(rf->pipe0_tx_addr, value, size);
+    rf->addr_len = size;
+    rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rf->pipe0_tx_addr, rf->addr_len);
+    rf24_write_reg_mul(rf, TX_ADDR, rf->pipe0_rx_addr, rf->addr_len);
+}
+/**
+ * @version 0
+ * @brief rf24_tx_mode
+ * @author minhnhut-n
+ * @function: used in switching mode from RX to TX
+ */
+void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
+{
+    rf->is_pipe0_rx = false;
+    rf24_ce_pin(rf, false);
+    delay_us(200);
+
+    if (rf->is_ack_payload_enabled)
+        rf24_flush_tx_buffer(rf);
+
+    // switch to tx mode
+    rf24_write_reg(rf, CONFIG_REG, (rf->cfg.rf24_config_reg & ~(1<<PRIM_RX)));
+
+    // address setting for tx
+    rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rf->pipe0_tx_addr, rf->addr_len);
+    // enable rx pipe 0
+    uint8_t enaa_reg = rf24_read_reg(rf, EN_AA) | (1 << 0);
+    rf24_write_reg(rf, EN_AA, enaa_reg);    
+
+    HAL_Delay(2);
+}
+/**
+ * @version 0.1
+ * @brief rf24_pipeData_rx_open
+ * @author minhnhut-n
+ * @function: for receiver application, open specific pipe to receive data
+ */
+void rf24_rx_pipe_open(RF24_Handle *rf, uint8_t pipeNum, uint64_t address)
+{
+    // store into cache, only enable when RX mode for pipe 0
+    if (pipeNum == 0) {
+        memcpy(rf->pipe0_rx_addr, &address, rf->addr_len);
+        rf->is_restore_pipe0_addr = true;
+    }
+
+    //Due to PIPE 2->5, share 4 bytes address with PIPE1 (same)
+    //It must be edit 1 LSB for address.
+    //PIPE0 share address with TX_PIPE,
+    //It must be not overwrite on TX_PIPE_ADDR when it is in TX mode
+    uint8_t targetPipeAddr = pipeAddr[pipeNum];
+    uint8_t value = 0;
+
+    if (pipeNum <= 5) {
+        if (pipeNum > 1) {
+            // only 1 byte address available for upper pipe 1
+            rf24_write_reg_mul(rf, targetPipeAddr, &address, 1);
+        }
+        else if (pipeNum == 1 || pipeNum != 0) {
+            //pipe 0 can be use in autoack in TX mode, override pipe 0 addr -> can fail ack process
+            rf24_write_reg_mul(rf, targetPipeAddr, &address, MAX_ADDRESS);
+        }
+
+        uint8_t enaa_reg = rf24_read_reg(rf, EN_AA) | (1 << pipeNum);
+        rf24_write_reg(rf, EN_AA, enaa_reg);
+    }
+}
+/**
+ * @brief: function design to close specific pipe on RX mode
+ */
 static void rf24_closeRxPipe(RF24_Handle *rf, uint8_t pipe_num) {
     uint8_t pipe_en = rf24_read_reg(rf, EN_RXADDR);
     rf24_write_reg(rf, EN_RXADDR, pipe_en & ~(1 << pipe_num));
@@ -865,7 +870,6 @@ static void rf24_closeRxPipe(RF24_Handle *rf, uint8_t pipe_num) {
         rf->is_pipe0_rx = false;
     }
 }
-
 /**
  * @version 0
  * @brief rf24_rx_mode
@@ -890,116 +894,7 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX)
     else {
         rf24_closeRxPipe(rf, 0);
     }
-
 }
-
-/**
- * @version 0
- * @brief rf24_tx_addr_setting
- * @author minhnhut-n
- * @function: set address before transmittion (tx side)
- */
-static void rf24_tx_addr_setting(RF24_Handle *rf, const uint8_t* tx_address)
-{
-    rf->is_pipe0_rx = false;
-    rf24_ce_pin(rf, false);
-    memcpy(rf->tx_addr, tx_address, MAX_ADDRESS);
-
-    //write tx address
-    rf24_write_reg_mul(rf, TX_ADDR, rf->tx_addr, MAX_ADDRESS);
-    //write ack address (pipe0), only allow write in rx mode
-    rf24_write_reg_mul(rf, RX_PIPE_ADDR_0, rf->tx_addr, MAX_ADDRESS);
-
-    if (rf->is_auto_ack) {
-        rf24_autoAck_config(rf, RE_ACK_TIME, RE_ACK_COUNT);
-    }
-}
-
-/**
- * @version 0
- * @brief rf24_tx_mode
- * @author minhnhut-n
- * @function: used in switching mode from RX to TX
- */
-void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address)
-{
-    rf->is_pipe0_rx = false;
-
-    // Power up and set to TX mode
-    rf24_power_enable_set(rf, true);
-    uint8_t config = rf24_read_reg(rf, CONFIG_REG);
-    config &= ~(1 << PRIM_RX);
-    rf24_write_reg(rf, CONFIG_REG, config);
-
-    //tx on write address
-    rf24_tx_addr_setting(rf, tx_address);
-
-    if (rf->is_auto_ack)
-        rf24_crc_setting(rf, true, rf->crc_setting);
-
-    HAL_Delay(2);
-}
-
-void rf24_tx_mode_init(RF24_Handle *rf)
-{
-    rf24_reset(rf);
-    rf24_tx_mode(rf, rf->tx_addr);
-}
-
-/**
- * @version 0.1
- * @brief rf24_standby_mode
- * @author minhnhut-n
- * @function: switch mode into standby mode (in case need power saving or idle state)
- */
-void rf24_standby_mode(RF24_Handle *rf)
-{
-    rf24_ce_pin(rf, false);
-    rf->cfg.rf24_config_reg = rf24_read_reg(rf, CONFIG_REG);
-
-    if ( !(rf->cfg.rf24_config_reg & (1 << PWR_UP)) ) {
-        rf->cfg.rf24_config_reg |= (1 << PWR_UP);
-        rf24_write_reg(rf, CONFIG_REG, rf->cfg.rf24_config_reg);
-    }
-    HAL_Delay(1);
-}
-
-/**
- * @version 0
- * @brief rf24_flush_tx_buffer
- * @author minhnhut-n
- * @function: flush TX buffer
- */
-void rf24_flush_tx_buffer(RF24_Handle *rf)
-{
-    spi_beginTransaction(rf);
-    uint8_t command = FLUSH_TX;
-    uint8_t status;
-    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, 1, RF_SPI_TIMEOUT);
-    spi_endTransaction(rf);
-}
-
-/**
- * @version 0
- * @brief rf24_flush_rx_buffer
- * @author minhnhut-n
- * @function: flush RX buffer
- */
-void rf24_flush_rx_buffer(RF24_Handle *rf)
-{  
-    spi_beginTransaction(rf);
-    uint8_t command = FLUSH_RX;
-    uint8_t status;
-    HAL_SPI_TransmitReceive(rf->cfg.hspi, &command, &status, 1, RF_SPI_TIMEOUT);
-    spi_endTransaction(rf);
-}
-
-
-bool rf24_isChipConnected(RF24_Handle *rf) {
-    uint8_t addr_width = rf24_read_reg(rf, SETUP_AW);
-    return (addr_width == (rf->addr_len - 2) ? 1 : 0);
-}
-
 /**
  * This register is named ACTIVATE which is relate with FEATURE reg
  * but for some reason this was hidden.
@@ -1010,7 +905,6 @@ void rf24_toggle_feature(RF24_Handle *rf) {
     rf24_write_reg(rf, 0x50, 0x73);
     spi_endTransaction(rf);
 }
-
 /**
  * @version 0.1
  * @brief rf24_init
@@ -1100,43 +994,6 @@ void rf24_init_pins(RF24_Handle *rf)
 
     printf("==== END INIT RF24 ====\r\n");
 }
-
-/**
- * @version 0
- * @brief rf24_carrier_wave_enable
- * @author minhnhut-n
- * @function: enable/disable continuous carrier wave output
- */
-void rf24_carrier_wave_enable(RF24_Handle *rf, bool enable) {
-    rf24_ce_pin(rf, false);
-    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
-
-    if (enable) {
-        rf_setup |= (1 << CONT_WAVE);
-    } else {
-        rf_setup &= ~(1 << CONT_WAVE);
-    }
-    rf24_write_reg(rf, RF_SETUP, rf_setup);
-}
-
-/**
- * @version 0
- * @brief rf24_pll_lock_enable
- * @author minhnhut-n
- * @function: enable/disable PLL lock for carrier wave stability
- */
-void rf24_pll_lock_enable(RF24_Handle *rf, bool enable) {
-    rf24_ce_pin(rf, false);
-    uint8_t rf_setup = rf24_read_reg(rf, RF_SETUP);
-
-    if (enable) {
-        rf_setup |= (1 << PLL_LOCK);
-    } else {
-        rf_setup &= ~(1 << PLL_LOCK);
-    }
-    rf24_write_reg(rf, RF_SETUP, rf_setup);
-}
-
 /**
  * @version 0
  * @brief rf24_reset
