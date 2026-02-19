@@ -99,9 +99,9 @@ typedef enum {
 #define R_REG			0x00
 #define W_REG			0x20
 #define R_PAY_LOAD		0x61
-#define W_PAY_LOAD		0xA0
-#define W_TX_PAYLOAD_WITHACK	0xA8 //Used with ack check with frame (if use)
-#define W_TX_PAYLOAD_NOACK	    0xB0 //Same but no ack in frame
+#define W_TX_PAYLOAD	0xA0
+#define W_TX_PAYLOAD_NO_ACK	    0xB0 //Same but no ack in frame
+// #define W_ACK_PAYLOAD   0xA8 // Write ack payload from A8 -> AF 
 #define FLUSH_TX		0xE1 //Used to throw out data
 #define FLUSH_RX		0xE2 //Used to receive data
 #define REUSE_TX_PL		0xE3

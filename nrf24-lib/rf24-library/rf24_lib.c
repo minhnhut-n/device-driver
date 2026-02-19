@@ -699,13 +699,6 @@ bool rf24_isChipConnected(RF24_Handle *rf) {
 uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool ack_pay_required)
 {
     uint8_t write_ok = rf24_write_data(rf, buffer, size, ack_pay_required);
-    if (!write_ok) {
-        rf24_clear_all_irq(rf);
-        rf24_flush_tx_buffer(rf);
-        rf24_flush_rx_buffer(rf);
-        return 0; // write failed
-    }
-
     uint8_t status_reg = rf24_read_reg(rf, STATUS_REG);
     uint32_t start = HAL_GetTick(); //ms
 
@@ -738,47 +731,39 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool
  * @author minhnhut-n
  * @function: child process to write data into register
  */
-uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size)
+uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool ack_pay_required)
 {
+    if (ack_pay_required)
+        rf->cmd_send_data = W_TX_PAYLOAD;
+    else
+        rf->cmd_send_data = W_TX_PAYLOAD_NO_ACK;
+
     //pre-processsing data
 	uint8_t payloadTX[ONE_SECTION_BUF] = {0};
     if (rf->dynamic_payload_enabled) {
-        if (rf->payload_size == 0) {
-            printf("[ERR] Wrong payload size setting!!\r\n");
-            return 0;
-        }
         size = MINVALUE(size, ONE_SECTION_BUF);
     	memcpy(payloadTX, buffer, size);
     } else {
+        // padding by 0
         memset(payloadTX, 0, ONE_SECTION_BUF);
     	memcpy(payloadTX, buffer, size);
         size = ONE_SECTION_BUF;
     }
 
-
-    uint8_t status_reg, dump;
-    //condition on write data
-    rf24_ce_pin(rf, false);
-    //spi transmission set
+    uint8_t status = 0;
     spi_beginTransaction(rf);
-    uint8_t cmd = rf->cmd_send_data;
-
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &cmd, &status_reg, 1, RF_SPI_TIMEOUT) != HAL_OK) {
-        printf("[ERR] write fail: %02X \r\n", cmd);
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, rf->cmd_send_data, &status, 1, RF_SPI_TIMEOUT) != HAL_OK) {
+        printf("[ERR] write fail: %02X \r\n", rf->cmd_send_data);
         spi_endTransaction(rf);
         return 0;
     }
 
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, payloadTX, &dump, size, RF_SPI_TIMEOUT) != HAL_OK) {
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, payloadTX, NOP, size, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("[ERR] data sending\r\n");
         spi_endTransaction(rf);
         return 0;
     }
     spi_endTransaction(rf);
-
-    // Do not toggle CE here. Let caller (rf24_transmit) control CE so it can
-    // remain high while waiting for TX_DS/MAX_RT. This prevents premature
-    // lowering of CE which may reduce successful transmissions.
     return 1;
 }
 /**

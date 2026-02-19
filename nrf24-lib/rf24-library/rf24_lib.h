@@ -38,7 +38,6 @@ typedef struct {
 //struct to store rf24 state
 typedef struct {
     RF24_Config cfg;
-    uint8_t payload_size;
     /**
      * pipe 0 is for auto ack, change to destination addr (tx) to receive ack
      * that need to restore to it own pipe 0 data.
