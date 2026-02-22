@@ -43,6 +43,7 @@ typedef struct {
      * that need to restore to it own pipe 0 data.
     */
     uint8_t addr_len;
+    uint8_t payload_size;
     uint8_t tx_addr[MAX_ADDRESS];
     uint8_t pipe0_rx_addr[MAX_ADDRESS];
     uint8_t pipe0_tx_addr[MAX_ADDRESS];

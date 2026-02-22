@@ -587,11 +587,11 @@ void rf24_cmd_on_write(RF24_Handle *rf, bool write_with_ack)
 
     feature = rf24_read_reg(rf, FEATURE);
     if (write_with_ack) {
-        rf->cmd_send_data = W_PAY_LOAD;
+        rf->cmd_send_data = W_TX_PAYLOAD;
         feature &= ~(1 << EN_DYN_ACK);
     }
     else {
-        rf->cmd_send_data = W_TX_PAYLOAD_NOACK;
+        rf->cmd_send_data = W_TX_PAYLOAD_NO_ACK;
         feature |= (1 << EN_DYN_ACK);
     }
     rf24_write_reg(rf, FEATURE, feature);
@@ -699,6 +699,8 @@ bool rf24_isChipConnected(RF24_Handle *rf) {
 uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool ack_pay_required)
 {
     uint8_t write_ok = rf24_write_data(rf, buffer, size, ack_pay_required);
+    if (write_ok) printf("Success on write data!\r\n");
+
     uint8_t status_reg = rf24_read_reg(rf, STATUS_REG);
     uint32_t start = HAL_GetTick(); //ms
 
@@ -707,7 +709,7 @@ uint8_t rf24_transmit(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bool
     // Need to finished soon (< 100us) estimate
     while (status_reg != (RF24_TX_DS | RF24_TX_DF)) {
         //not response
-        if (HAL_GetTick - start > 100) {
+        if (HAL_GetTick() - start > 100) {
             printf("Asserted as fail!\r\n");
             return 0;
         }
@@ -752,13 +754,13 @@ uint8_t rf24_write_data(RF24_Handle *rf, const uint8_t* buffer, uint8_t size, bo
 
     uint8_t status = 0;
     spi_beginTransaction(rf);
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, rf->cmd_send_data, &status, 1, RF_SPI_TIMEOUT) != HAL_OK) {
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, &rf->cmd_send_data, &status, 1, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("[ERR] write fail: %02X \r\n", rf->cmd_send_data);
         spi_endTransaction(rf);
         return 0;
     }
 
-    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, payloadTX, NOP, size, RF_SPI_TIMEOUT) != HAL_OK) {
+    if (HAL_SPI_TransmitReceive(rf->cfg.hspi, payloadTX, (uint8_t*)NOP, size, RF_SPI_TIMEOUT) != HAL_OK) {
         printf("[ERR] data sending\r\n");
         spi_endTransaction(rf);
         return 0;
@@ -828,16 +830,20 @@ void rf24_rx_pipe_open(RF24_Handle *rf, uint8_t pipeNum, uint64_t address)
     //PIPE0 share address with TX_PIPE,
     //It must be not overwrite on TX_PIPE_ADDR when it is in TX mode
     uint8_t targetPipeAddr = pipeAddr[pipeNum];
-    uint8_t value = 0;
+    uint8_t value[MAX_ADDRESS] = {0};
+    uint8_t config_reg = rf24_read_reg(rf, CONFIG_REG);
+    rf->cfg.rf24_config_reg = config_reg;
 
     if (pipeNum <= 5) {
         if (pipeNum > 1) {
             // only 1 byte address available for upper pipe 1
-            rf24_write_reg_mul(rf, targetPipeAddr, &address, 1);
+        	value[0] = (uint8_t) (address & 0xFF);
+            rf24_write_reg_mul(rf, targetPipeAddr, value, 1);
         }
-        else if (pipeNum == 1 || pipeNum != 0) {
+        else if (rf->cfg.rf24_config_reg & (1 << PRIM_RX) || pipeNum != 0) {
             //pipe 0 can be use in autoack in TX mode, override pipe 0 addr -> can fail ack process
-            rf24_write_reg_mul(rf, targetPipeAddr, &address, MAX_ADDRESS);
+            memcpy(value, &address, rf->addr_len);
+            rf24_write_reg_mul(rf, targetPipeAddr, value, rf->addr_len);
         }
 
         uint8_t enaa_reg = rf24_read_reg(rf, EN_AA) | (1 << pipeNum);

@@ -18,15 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "rf24_lib.h"
-#include "stm_system_config.h"
 #include <string.h>
-
-#define isEmptyBuffer(buf)      ((buf) != NULL ? 0 : 1)
-#define minValue(val1, val2)	((val1) < (val2) ? (val1) : (val2))
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,14 +66,41 @@ static void MX_TIM2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define NRF_CMD_NOP   0xFF
 
-//debug with UART port
-int _write(int file, char *ptr, int len)
+static void NRF_CSN_LOW(void)
 {
-    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
 }
 
+static void NRF_CSN_HIGH(void)
+{
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+}
+
+uint8_t NRF_GetStatus(void)
+{
+    uint8_t tx = NRF_CMD_NOP;
+    uint8_t rx = 0;
+
+    NRF_CSN_LOW();
+    HAL_SPI_TransmitReceive(&hspi2, &tx, &rx, 1, HAL_MAX_DELAY);
+    NRF_CSN_HIGH();
+
+    return rx;
+}
+
+uint8_t NRF24_IsAvailable(void)
+{
+    uint8_t status = NRF_GetStatus();
+
+    printf("STATUS = 0x%02X\r\n", status);
+
+    if (status == 0xFF || status == 0x00)
+        return 0;
+
+    return 1;
+}
 
 /* USER CODE END 0 */
 
@@ -114,18 +137,22 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
+
   /* USER CODE BEGIN 2 */
 
-  //========STM_SYSTEM_CONFIG=========
-  DWT_Init();
+  printf("=== RF24 HARDWARE TEST ===\r\n");
 
-  //========RF_CONFIGURATION==========
-  rf_handle.cfg.cePin = CE_Pin;
-  rf_handle.cfg.cePort = CE_GPIO_Port;
-  rf_handle.cfg.csnPin = CS_Pin;
-  rf_handle.cfg.csnPort = CS_GPIO_Port;
-  rf_handle.cfg.hspi = &hspi2;
-  //========END CONFIGURATION==========
+  HAL_Delay(100);
+
+  if (NRF24_IsAvailable())
+  {
+      printf("RF24 detected OK!\r\n");
+      HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+  }
+  else
+  {
+      printf("RF24 NOT detected!\r\n");
+  }
 
   /* USER CODE END 2 */
 
