@@ -9,31 +9,6 @@
 #define INC_RF24_INFO_REG_H_
 
 /*
- * Command for RF24, SPI protocol
- *
- * Command word: MSB -> LSB
- * Data: LSB --> MSB
- */
-
-#define BIT_ENABLE			1
-#define BIT_DISABLE			0
-
-#define R_REG			0x00
-#define W_REG			0x20
-
-#define R_PAY_LOAD		0x61
-#define W_PAY_LOAD		0xA0
-
-#define FLUSH_TX		0xE1 //Used to throw out data
-#define FLUSH_RX		0xE2 //Used to receive data
-
-#define W_TX_PAYLOAD	0xA0 //Used with ack check with frame (if use)
-#define W_TX_PAYLOAD_NOACK	0xB0 //Same but no ack in frame
-
-#define NOP				0xFF //None of operation
-#define R_RX_PL_WID		0x70 //Read RX width on top.
-
-/*
  * Configuration register
  */
 #define CONFIG_REG		0x00
@@ -46,6 +21,15 @@
 #define STATUS_REG		0x07
 #define OBSERVE_TX		0x08
 #define RPD             0x09
+typedef enum {
+    RX_PIPE_ADDR_0 =	0x0A,
+    RX_PIPE_ADDR_1 =	0x0B,
+    RX_PIPE_ADDR_2 =	0x0C,
+    RX_PIPE_ADDR_3 =	0x0D,
+    RX_PIPE_ADDR_4 =	0x0E,
+    RX_PIPE_ADDR_5 =	0x0F
+}pipe_enum_t;
+
 #define TX_ADDR			0x10
 #define RX_PW_P0		0x11
 #define RX_PW_P1        0x12
@@ -56,7 +40,6 @@
 #define FIFO_STATUS     0x17
 #define DYNPD           0x1C
 #define FEATURE         0x1D
-#define ONE_SECTION_BUF 32
 
 /* Bit Mnemonics */
 #define MASK_RX_DR  6
@@ -108,54 +91,30 @@
 #define EN_ACK_PAY  1
 #define EN_DYN_ACK  0
 
-//User config
-#define W_DATA			1
-#define W_CONFIG		0
-#define RX_MODE			1
-#define TX_MODE			0
-#define MAX_ADDRESS 	5
-#define RF_SPI_TIMEOUT	200
-#define RX_PIPE_NULL_0	0
-#define ONE_BYTE        1
-#define ADDR_WD_OFFSET  2
-#define V_RX_DR         64
-#define V_TX_DS         32
-#define V_MAX_RT        16
-#define SPI_TIMEOUT     200
+//Bit sets
+#define BIT_ENABLE			1
+#define BIT_DISABLE			0
 
-#define PIPE0 0
-#define PIPE1 1
-#define PIPE2 2
-#define PIPE3 3
-#define PIPE4 4
-#define PIPE5 5
+//Instruction
+#define R_REG			0x00
+#define W_REG			0x20
+#define R_PAY_LOAD		0x61
+#define W_TX_PAYLOAD	0xA0
+#define W_TX_PAYLOAD_NO_ACK	    0xB0 //Same but no ack in frame
+// #define W_ACK_PAYLOAD   0xA8 // Write ack payload from A8 -> AF 
+#define FLUSH_TX		0xE1 //Used to throw out data
+#define FLUSH_RX		0xE2 //Used to receive data
+#define REUSE_TX_PL		0xE3
+#define R_RX_PL_WID		0x60 //Read RX width on top.
+#define NOP				0xFF //None of operation
 
-#define BAUD_1MBPS 0
-#define BAUD_2MBPS 1
-#define BAUD_250KB 2
+#define REGISTER_MASK   0x1F
+#define ONE_SECTION_BUF 32
 
-#define MIN_POWER 	 0
-#define MID_LO_POWER 1
-#define	MID_HI_POWER 2
-#define MAX_POWER 	 3
-
-#define RE_ACK_TIME  250	  //microseconds
-#define RE_ACK_COUNT 5    //max re-ack count
-
-typedef enum {
-    RX_PIPE_ADDR_0 =	0x0A,
-    RX_PIPE_ADDR_1 =	0x0B,
-    RX_PIPE_ADDR_2 =	0x0C,
-    RX_PIPE_ADDR_3 =	0x0D,
-    RX_PIPE_ADDR_4 =	0x0E,
-    RX_PIPE_ADDR_5 =	0x0F
-}pipe_enum_t;
-
-typedef enum {
-    ADDR_3_BYTE =	1,
-    ADDR_4_BYTE =	2,
-    ADDR_5_BYTE =	3
-}addr_width_enum_t;
-
+/* P model bit Mnemonics */
+#define RF_DR_LOW   5
+#define RF_DR_HIGH  3
+#define RF_PWR_LOW  1
+#define RF_PWR_HIGH 2
 
 #endif /* INC_RF24_INFO_REG_H_ */
