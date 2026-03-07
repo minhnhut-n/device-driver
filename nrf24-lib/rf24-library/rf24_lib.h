@@ -113,6 +113,7 @@ typedef enum {
     RF24_EVT_TIMEOUT = 4
 } rf24_event_t;
 
+void rf24_clear_all_irq(RF24_Handle *rf);
 /**
  * @brief helper function for stm32-spi purpose
  * in this function, csn (chip select pin will go low to enable transmission)
@@ -127,6 +128,10 @@ void spi_endTransaction(RF24_Handle *rf);
  * @brief check whether data is ready to read
  */
 bool rf24_is_data_available(RF24_Handle *rf);
+/**
+ * @brief set payload size
+ */
+void rf24_set_payload_size(RF24_Handle *rf, uint8_t size);
 /**
  * @brief function support for writing configuration wih spi
  */
@@ -151,17 +156,17 @@ void rf24_tx_to_addr(RF24_Handle *rf, uint8_t *value, uint8_t size);
  * @brief: init rf24 radio init
  * @note:
  */
-void rf24_init_radio(RF24_Handle *rf);
+bool rf24_init_radio(RF24_Handle *rf);
 /**
  * @brief: init rf24 module pins (CE, CSN)
  * @note:
  */
-void rf24_init_pins(RF24_Handle *rf);
+bool rf24_init_pins(RF24_Handle *rf);
 /**
  * @brief: init rf24 module
  * @note:
  */
-void rf24_init(RF24_Handle *rf);
+bool rf24_init(RF24_Handle *rf);
 /**
  * @brief frame of sending step
  */
@@ -212,7 +217,7 @@ void rf24_rx_mode(RF24_Handle *rf, uint8_t pipeNum, uint8_t* addressRX);
 /**
  * @brief Configuration mode TX on RF24
  */
-void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address);
+void rf24_tx_mode(RF24_Handle *rf, const uint8_t* tx_address, uint8_t size);
 /**
  * @brief Configuration mode STANDBY on RF24
  */
@@ -272,6 +277,6 @@ void print_tc_function(RF24_Handle *rf, uint8_t pipeNum);
 void print_reg(const char *name, uint8_t value);
 void print_addr(const char *name, uint8_t *addr, uint8_t len);
 void rf24_dump_registers(RF24_Handle *rf);
-
+void rf24_dump_state_serial(RF24_Handle *rf);
 
 #endif /* INC_RF24_LIB_H_ */
