@@ -5,10 +5,10 @@
 //modifiable declare
 extern SPI_HandleTypeDef hspi2;
 #define RF24_SPI &hspi2
-#define RF24_CE_PIN GPIO_PIN_8
-#define RF24_CE_PORT GPIOA
-#define RF24_CS_PIN GPIO_PIN_12
-#define RF24_CS_PORT GPIOB
+#define RF24_CE_PIN GPIO_PIN_12
+#define RF24_CE_PORT GPIOB
+#define RF24_CS_PIN GPIO_PIN_8
+#define RF24_CS_PORT GPIOA
 
 
 //function, not expect to change if not have issue
@@ -113,8 +113,9 @@ void rf24_init(void) {
     
     rf24_reset(0);
     rf24_write_reg(CONFIG, 0);
-    rf24_write_reg(EN_AA, 0);
-    rf24_write_reg(EN_RXADDR, 0);
+
+    rf24_autoAck_enable(0);
+    rf24_enable_rx_pipe(0, 0);
     rf24_write_reg(SETUP_AW, 0x03); //five bytes address as default
     rf24_write_reg(SETUP_RETR, 0);  //no retry on auto-ack
     rf24_write_reg(RF_CH, 12);
@@ -264,4 +265,85 @@ void rf24_read_all (uint8_t *data)
 		*(data+i) = rf24_read_reg(i-12);
 	}
 
+}
+
+/**
+ * @brief: CRC setting for payload transmit
+ */
+void rf24_crc_setting(uint8_t state, uint8_t numCRCByte) {
+    uint8_t config = rf24_read_reg(CONFIG);
+    if (state) {
+        config |= (1 << EN_CRC);
+        if (numCRCByte == 1) {
+            config &= ~(1 << CRCO);
+        }
+        else
+        {
+            config |= (1 << CRCO);
+        }
+    }
+    else {
+        config &= ~(1 << EN_CRC);
+    }
+    rf24_write_reg(CONFIG, config);
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_autoAck_enable
+ * @author minhnhut-n
+ * @function: auto-ack for 2 ways verifing and sending data (high reliable) 
+ */
+void rf24_autoAck_enable(uint8_t type)
+{
+    uint8_t config = rf24_read_reg(CONFIG);
+    if (type) //true
+    {
+        config = 0x3F; //enable all pipe
+    }
+    else
+    {
+        config = 0x00; //disable all pipe
+    }
+    rf24_write_reg(EN_AA, config);
+}
+/**
+ * @version 0
+ * @brief rf24_autoAck_config
+ * @author minhnhut-n
+ * @function: configuration for autoack if it is enabled
+ * setting about 2 parameters:
+ * ack_time: time, which is a gap between 2 consecutive send
+ * 250 - 4000us
+ * ack_retry: number of times resend (no ack is received)
+ */
+uint8_t rf24_autoAck_config(uint8_t ack_time, uint8_t ack_retry)
+{  
+    if (ack_time < 0) {
+        return 0;
+    }
+
+    uint8_t config = 0x00;  
+    config |= (ack_time) << 4 | (ack_retry << 0);
+    rf24_write_reg(SETUP_RETR, config);
+    return 1;
+}
+/**
+ * @brief: for open specific pipe for reading message
+ */
+void rf24_enable_rx_pipe(uint8_t enable, uint8_t pipe_num) {
+    if (enable) {
+        if (pipe_num != ENABLE_ALL_RX_PIPE) {    
+            uint8_t reg_enable_aa = rf24_read_reg(EN_RXADDR);
+            reg_enable_aa |= (1 << pipe_num);
+            rf24_write_reg(EN_RXADDR, reg_enable_aa);
+        }
+        else {
+            rf24_write_reg(EN_RXADDR, 0x3F);
+        }
+    }
+    else {
+        //disable
+        rf24_write_reg(EN_RXADDR, 0x00);
+    }
 }
