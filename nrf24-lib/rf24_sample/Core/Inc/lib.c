@@ -115,6 +115,7 @@ void rf24_init(void) {
     rf24_write_reg(CONFIG, 0);
 
     rf24_autoAck_enable(0);
+    rf24_autoAck_config(0, 0);
     rf24_enable_rx_pipe(0, 0);
     rf24_write_reg(SETUP_AW, 0x03); //five bytes address as default
     rf24_write_reg(SETUP_RETR, 0);  //no retry on auto-ack
@@ -268,27 +269,6 @@ void rf24_read_all (uint8_t *data)
 }
 
 /**
- * @brief: CRC setting for payload transmit
- */
-void rf24_crc_setting(uint8_t state, uint8_t numCRCByte) {
-    uint8_t config = rf24_read_reg(CONFIG);
-    if (state) {
-        config |= (1 << EN_CRC);
-        if (numCRCByte == 1) {
-            config &= ~(1 << CRCO);
-        }
-        else
-        {
-            config |= (1 << CRCO);
-        }
-    }
-    else {
-        config &= ~(1 << EN_CRC);
-    }
-    rf24_write_reg(CONFIG, config);
-}
-
-/**
  * @version 0.1
  * @brief rf24_autoAck_enable
  * @author minhnhut-n
@@ -346,4 +326,84 @@ void rf24_enable_rx_pipe(uint8_t enable, uint8_t pipe_num) {
         //disable
         rf24_write_reg(EN_RXADDR, 0x00);
     }
+}
+
+/**
+ * @brief: CRC setting for payload transmit
+ */
+void rf24_crc_setting(uint8_t state, uint8_t numCRCByte) {
+    uint8_t config = rf24_read_reg(CONFIG);
+    if (state) {
+        config |= (1 << EN_CRC);
+        if (numCRCByte == 1) {
+            config &= ~(1 << CRCO);
+        }
+        else
+        {
+            config |= (1 << CRCO);
+        }
+    }
+    else {
+        config &= ~(1 << EN_CRC);
+    }
+    rf24_write_reg(CONFIG, config);
+}
+
+/**
+ * @brief: set address width for transmission
+ */
+uint8_t rf24_set_addr_width(uint8_t length) {
+    if (length > MAX_ADDR_LEN || length < MIN_ADDR_LEN) {
+        return 0;
+    }
+    uint8_t size = 0x03 & (length -2);
+    rf24_write_reg(SETUP_AW, size);
+    return 1;
+}
+
+/**
+ * @brief: set channel (variety from 1-> 123)
+ */
+uint8_t rf24_channel_set(uint8_t channel) {
+    if (channel > 123 || channel < 1) {
+        return 0;
+    }
+    uint8_t data = 0x7F & (channel);
+    rf24_write_reg(SETUP_AW, data);
+    return 1;
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_baudrate_set
+ * @author minhnhut-n
+ * @function: setting data rate on air range from 250kbps to 2Mbps
+ */
+void rf24_air_rate(uint8_t baudrate, uint8_t strengh)
+{
+    uint8_t config = rf24_read_reg(RF_SETUP);
+
+    switch (baudrate)
+    {
+    case RF24_1MBPS:
+        config &= ~(1<<RF_DR_HIGH);
+        config &= ~(1<<RF_DR_LOW);
+        break;
+    case RF24_2MBPS:
+        config |= (1<<RF_DR_HIGH);
+        config &= ~(1<<RF_DR_LOW);
+        break;
+    case RF24_250KBPS:
+        config &= ~(1<<RF_DR_HIGH);
+        config |= (1<<RF_DR_LOW);
+        break;
+    default:
+        break;
+    }
+    
+    //signal strengh
+    config = config & 0xF9;
+    config = config | (strengh << 1);
+
+    rf24_write_reg(RF_SETUP, config);
 }

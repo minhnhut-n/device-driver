@@ -101,11 +101,21 @@ typedef enum {
 	//... it have 16 value from 250 to 4000us
 } ard_delay_t;
 
+#define RF24_1MBPS 0
+#define RF24_2MBPS 1
+#define RF24_250KBPS 2
+
+#define RF24_SIG_0 0
+#define RF24_SIG_1 1
+#define RF24_SIG_2 2
+#define RF24_SIG_3 3
+
 /* User defined */
 #define PAYLOAD_MAX 32
 #define CMD_WRITE_TIME 100
 #define DATA_WRITE_TIME 1000
 #define MAX_ADDR_LEN    5
+#define MIN_ADDR_LEN    3
 #define ENABLE_ALL_RX_PIPE 6
 
 //nrf24 functions
@@ -127,5 +137,9 @@ void rf24_crc_setting(uint8_t state, uint8_t numCRCByte);
 void rf24_autoAck_enable(uint8_t type);
 uint8_t rf24_autoAck_config(uint8_t ack_time, uint8_t ack_retry);
 void rf24_enable_rx_pipe(uint8_t enable, uint8_t pipe_num);
+
+uint8_t rf24_channel_set(uint8_t channel);
+uint8_t rf24_set_addr_width(uint8_t length);
+void rf24_air_rate(uint8_t baudrate, uint8_t strengh);
 
 #endif /* _LIB_H_ */
