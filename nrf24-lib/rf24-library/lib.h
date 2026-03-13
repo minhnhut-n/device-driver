@@ -119,104 +119,27 @@ typedef enum {
 #define ENABLE_ALL_RX_PIPE 6
 
 //nrf24 functions
-/**
- * @brief Initialize nRF24 with default settings.
- * @version 0.1
- */
 void rf24_init(void);
 
-/**
- * @brief Set device to TX mode with address and channel.
- * @arg Address 5-byte TX address.
- * @arg channel RF channel (1..123).
- * @version 0.1
- */
 void rf24_tx_mode(uint8_t *Address, uint8_t channel);
-/**
- * @brief Set device to RX mode with address and channel (pipe 1).
- * @arg addr 5-byte RX address.
- * @arg channel RF channel (1..123).
- * @version 0.1
- */
 void rf24_rx_mode(uint8_t *addr, uint8_t channel);
 
-/**
- * @brief Transmit a fixed-size payload (PAYLOAD_MAX bytes).
- * @arg data Pointer to payload buffer.
- * @return 1 on success, 0 on failure.
- * @version 0.1
- */
 uint8_t rf24_transmit(uint8_t *data);
-/**
- * @brief Check if data is available on a pipe.
- * @arg pipenum Pipe number (0..5).
- * @return 1 if available, 0 otherwise.
- * @version 0.1
- */
 uint8_t is_data_available(int pipenum);
 
-/**
- * @brief Read a fixed-size payload (PAYLOAD_MAX bytes) from RX FIFO.
- * @arg data Output buffer.
- * @version 0.1
- */
 void rf24_receive(uint8_t *data);
-/**
- * @brief Read all main registers and addresses into a buffer.
- * @arg data Output buffer (at least 38 bytes).
- * @version 0.1
- */
 void rf24_read_all(uint8_t *data); // store all address value into 1 buffer
 
 /**
- * @brief Configure CRC.
- * @arg state 0=disable, 1=enable.
- * @arg numCRCByte 1 or 2 bytes.
- * @version 0.1
+ * @brief: CRC setting for payload transmit
  */
 void rf24_crc_setting(uint8_t state, uint8_t numCRCByte);
-/**
- * @brief Enable or disable auto-ack on all pipes.
- * @arg type 0=disable, 1=enable.
- * @version 0.1
- */
 void rf24_autoAck_enable(uint8_t type);
-/**
- * @brief Configure auto-ack retry behavior.
- * @arg ack_time Retry delay (0..15) mapped to 250..4000us.
- * @arg ack_retry Retry count (0..15).
- * @return 1 if parameters accepted, 0 otherwise.
- * @version 0.1
- */
 uint8_t rf24_autoAck_config(uint8_t ack_time, uint8_t ack_retry);
-/**
- * @brief Enable or disable RX pipes.
- * @arg enable 0=disable all, 1=enable.
- * @arg pipe_num Pipe number (0..5) or ENABLE_ALL_RX_PIPE.
- * @version 0.1
- */
 void rf24_enable_rx_pipe(uint8_t enable, uint8_t pipe_num);
 
-/**
- * @brief Set RF channel (1..123).
- * @arg channel RF channel.
- * @return 1 if ok, 0 if out of range.
- * @version 0.1
- */
 uint8_t rf24_channel_set(uint8_t channel);
-/**
- * @brief Set address width.
- * @arg length Address length in bytes (3..5).
- * @return 1 if ok, 0 if out of range.
- * @version 0.1
- */
 uint8_t rf24_set_addr_width(uint8_t length);
-/**
- * @brief Set data rate and output power.
- * @arg baudrate RF24_1MBPS/RF24_2MBPS/RF24_250KBPS.
- * @arg strengh RF24_SIG_0..RF24_SIG_3 (power level).
- * @version 0.1
- */
 void rf24_air_rate(uint8_t baudrate, uint8_t strengh);
 
 #endif /* _LIB_H_ */
