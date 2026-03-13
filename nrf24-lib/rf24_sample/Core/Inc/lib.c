@@ -114,12 +114,14 @@ void rf24_init(void) {
     rf24_reset(0);
     rf24_write_reg(CONFIG, 0);
 
-    rf24_autoAck_enable(0);
-    rf24_autoAck_config(0, 0);
+    rf24_autoAck_enable(1);
+    //arduino default (4000us and 15 try times)
+    rf24_autoAck_config(15, 15);
     rf24_enable_rx_pipe(0, 0);
-    rf24_set_addr_width(MAX_ADDR_LEN); //five bytes address as default
+    rf24_set_addr_width(MAX_ADDR_LEN);
     rf24_channel_set(12);
-    rf24_air_rate(0, RF24_SIG_0);    // 1Mbps, -18dBm
+    rf24_air_rate(0, RF24_SIG_0);
+    rf24_crc_setting(1, 2);
     
     //end config
     CE_ENABLE();
@@ -130,6 +132,8 @@ void rf24_tx_mode(uint8_t *Address, uint8_t channel) {
 
     rf24_write_reg(RF_CH, channel);
     rf24_write_regMulti(TX_ADDR, Address, MAX_ADDR_LEN);
+    // For auto-ack, RX_ADDR_P0 must match TX_ADDR
+    rf24_write_regMulti(RX_ADDR_P0, Address, MAX_ADDR_LEN);
 
     //change mode and power up device
     uint8_t config = rf24_read_reg(CONFIG);
@@ -206,7 +210,7 @@ void rf24_rx_mode(uint8_t *addr, uint8_t channel ) {
 
     uint8_t config = rf24_read_reg(CONFIG);
     //change mode to rx and power up
-    config = (1 << 0) | (1 << 1);
+    config |= (1 << 0) | (1 << 1);
     rf24_write_reg(CONFIG, config);
 
     CE_ENABLE();
