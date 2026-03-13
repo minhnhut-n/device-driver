@@ -117,10 +117,9 @@ void rf24_init(void) {
     rf24_autoAck_enable(0);
     rf24_autoAck_config(0, 0);
     rf24_enable_rx_pipe(0, 0);
-    rf24_write_reg(SETUP_AW, 0x03); //five bytes address as default
-    rf24_write_reg(SETUP_RETR, 0);  //no retry on auto-ack
-    rf24_write_reg(RF_CH, 12);
-    rf24_write_reg(RF_SETUP, 0);    // 1Mbps, 0dBm
+    rf24_set_addr_width(MAX_ADDR_LEN); //five bytes address as default
+    rf24_channel_set(12);
+    rf24_air_rate(0, RF24_SIG_0);    // 1Mbps, -18dBm
     
     //end config
     CE_ENABLE();
@@ -356,8 +355,10 @@ uint8_t rf24_set_addr_width(uint8_t length) {
     if (length > MAX_ADDR_LEN || length < MIN_ADDR_LEN) {
         return 0;
     }
-    uint8_t size = 0x03 & (length -2);
-    rf24_write_reg(SETUP_AW, size);
+    // SETUP_AW bits[1:0]: 01=3 bytes, 10=4 bytes, 11=5 bytes
+    uint8_t aw = (uint8_t)(length - 2);
+    aw &= 0x03; // ensure only 2 bits
+    rf24_write_reg(SETUP_AW, aw);
     return 1;
 }
 
@@ -369,7 +370,7 @@ uint8_t rf24_channel_set(uint8_t channel) {
         return 0;
     }
     uint8_t data = 0x7F & (channel);
-    rf24_write_reg(SETUP_AW, data);
+    rf24_write_reg(RF_CH, data);
     return 1;
 }
 
