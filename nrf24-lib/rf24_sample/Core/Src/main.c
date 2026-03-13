@@ -62,8 +62,8 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-#define TX_MODE
-//#define RX_MODE
+//#define TX_MODE
+#define RX_MODE
 uint8_t address[] = {0xEE,0xDD,0xCC,0xBB,0xAA};
 uint8_t TxData[] = "Hello World\n";
 uint8_t rx_buffer[32];
@@ -135,13 +135,11 @@ int main(void)
   rf24_init();
 #ifdef TX_MODE
   rf24_tx_mode(address, 12);
-  rf24_print_config();
 #elif defined(RX_MODE)
   rf24_rx_mode(address, 12);
-  rf24_print_config();
 #endif
-//  rf24_read_all(data);
-//  rf24_print_config();
+ rf24_read_all(data);
+ rf24_print_config();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -155,6 +153,7 @@ int main(void)
 
       if(rf24_transmit(TxData) != 0) {
         printf("Data: %s\r\n", TxData);
+        HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
         HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
       }
       HAL_Delay(500);
@@ -164,6 +163,7 @@ int main(void)
         rf24_receive(rx_buffer);
         rx_buffer[PAYLOAD_MAX - 1] = '\0';
         printf("RX: %s\r\n", rx_buffer);
+        HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
         HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
       }
     #endif
@@ -300,10 +300,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CE_GPIO_Port, CE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, CS_Pin|LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -312,19 +312,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : CS_Pin */
-  GPIO_InitStruct.Pin = CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CS_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pin : CE_Pin */
   GPIO_InitStruct.Pin = CE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(CE_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : CS_Pin LED1_Pin */
+  GPIO_InitStruct.Pin = CS_Pin|LED1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

@@ -5,10 +5,10 @@
 //modifiable declare
 extern SPI_HandleTypeDef hspi2;
 #define RF24_SPI &hspi2
-#define RF24_CE_PIN GPIO_PIN_8
-#define RF24_CE_PORT GPIOA
-#define RF24_CS_PIN GPIO_PIN_12
-#define RF24_CS_PORT GPIOB
+#define RF24_CE_PIN GPIO_PIN_12
+#define RF24_CE_PORT GPIOB
+#define RF24_CS_PIN GPIO_PIN_8
+#define RF24_CS_PORT GPIOA
 
 
 //function, not expect to change if not have issue
@@ -113,12 +113,15 @@ void rf24_init(void) {
     
     rf24_reset(0);
     rf24_write_reg(CONFIG, 0);
-    rf24_write_reg(EN_AA, 0);
-    rf24_write_reg(EN_RXADDR, 0);
-    rf24_write_reg(SETUP_AW, 0x03); //five bytes address as default
-    rf24_write_reg(SETUP_RETR, 0);  //no retry on auto-ack
-    rf24_write_reg(RF_CH, 12);
-    rf24_write_reg(RF_SETUP, 0);    // 1Mbps, 0dBm
+
+    rf24_autoAck_enable(1);
+    //arduino default (4000us and 15 try times)
+    rf24_autoAck_config(15, 15);
+    rf24_enable_rx_pipe(0, 0);
+    rf24_set_addr_width(MAX_ADDR_LEN);
+    rf24_channel_set(12);
+    rf24_air_rate(0, RF24_SIG_0);
+    rf24_crc_setting(1, 2);
     
     //end config
     CE_ENABLE();
@@ -129,6 +132,8 @@ void rf24_tx_mode(uint8_t *Address, uint8_t channel) {
 
     rf24_write_reg(RF_CH, channel);
     rf24_write_regMulti(TX_ADDR, Address, MAX_ADDR_LEN);
+    // For auto-ack, RX_ADDR_P0 must match TX_ADDR
+    rf24_write_regMulti(RX_ADDR_P0, Address, MAX_ADDR_LEN);
 
     //change mode and power up device
     uint8_t config = rf24_read_reg(CONFIG);
@@ -205,7 +210,7 @@ void rf24_rx_mode(uint8_t *addr, uint8_t channel ) {
 
     uint8_t config = rf24_read_reg(CONFIG);
     //change mode to rx and power up
-    config = (1 << 0) | (1 << 1);
+    config |= (1 << 0) | (1 << 1);
     rf24_write_reg(CONFIG, config);
 
     CE_ENABLE();
@@ -264,4 +269,146 @@ void rf24_read_all (uint8_t *data)
 		*(data+i) = rf24_read_reg(i-12);
 	}
 
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_autoAck_enable
+ * @author minhnhut-n
+ * @function: auto-ack for 2 ways verifing and sending data (high reliable) 
+ */
+void rf24_autoAck_enable(uint8_t type)
+{
+    uint8_t config = rf24_read_reg(CONFIG);
+    if (type) //true
+    {
+        config = 0x3F; //enable all pipe
+    }
+    else
+    {
+        config = 0x00; //disable all pipe
+    }
+    rf24_write_reg(EN_AA, config);
+}
+/**
+ * @version 0
+ * @brief rf24_autoAck_config
+ * @author minhnhut-n
+ * @function: configuration for autoack if it is enabled
+ * setting about 2 parameters:
+ * ack_time: time, which is a gap between 2 consecutive send
+ * 250 - 4000us
+ * ack_retry: number of times resend (no ack is received)
+ */
+uint8_t rf24_autoAck_config(uint8_t ack_time, uint8_t ack_retry)
+{  
+    if (ack_time < 0) {
+        return 0;
+    }
+
+    uint8_t config = 0x00;  
+    config |= (ack_time) << 4 | (ack_retry << 0);
+    rf24_write_reg(SETUP_RETR, config);
+    return 1;
+}
+/**
+ * @brief: for open specific pipe for reading message
+ */
+void rf24_enable_rx_pipe(uint8_t enable, uint8_t pipe_num) {
+    if (enable) {
+        if (pipe_num != ENABLE_ALL_RX_PIPE) {    
+            uint8_t reg_enable_aa = rf24_read_reg(EN_RXADDR);
+            reg_enable_aa |= (1 << pipe_num);
+            rf24_write_reg(EN_RXADDR, reg_enable_aa);
+        }
+        else {
+            rf24_write_reg(EN_RXADDR, 0x3F);
+        }
+    }
+    else {
+        //disable
+        rf24_write_reg(EN_RXADDR, 0x00);
+    }
+}
+
+/**
+ * @brief: CRC setting for payload transmit
+ */
+void rf24_crc_setting(uint8_t state, uint8_t numCRCByte) {
+    uint8_t config = rf24_read_reg(CONFIG);
+    if (state) {
+        config |= (1 << EN_CRC);
+        if (numCRCByte == 1) {
+            config &= ~(1 << CRCO);
+        }
+        else
+        {
+            config |= (1 << CRCO);
+        }
+    }
+    else {
+        config &= ~(1 << EN_CRC);
+    }
+    rf24_write_reg(CONFIG, config);
+}
+
+/**
+ * @brief: set address width for transmission
+ */
+uint8_t rf24_set_addr_width(uint8_t length) {
+    if (length > MAX_ADDR_LEN || length < MIN_ADDR_LEN) {
+        return 0;
+    }
+    // SETUP_AW bits[1:0]: 01=3 bytes, 10=4 bytes, 11=5 bytes
+    uint8_t aw = (uint8_t)(length - 2);
+    aw &= 0x03; // ensure only 2 bits
+    rf24_write_reg(SETUP_AW, aw);
+    return 1;
+}
+
+/**
+ * @brief: set channel (variety from 1-> 123)
+ */
+uint8_t rf24_channel_set(uint8_t channel) {
+    if (channel > 123 || channel < 1) {
+        return 0;
+    }
+    uint8_t data = 0x7F & (channel);
+    rf24_write_reg(RF_CH, data);
+    return 1;
+}
+
+/**
+ * @version 0.1
+ * @brief rf24_baudrate_set
+ * @author minhnhut-n
+ * @function: setting data rate on air range from 250kbps to 2Mbps
+ */
+void rf24_air_rate(uint8_t baudrate, uint8_t strengh)
+{
+    uint8_t config = rf24_read_reg(RF_SETUP);
+
+    switch (baudrate)
+    {
+    case RF24_1MBPS:
+        config &= ~(1<<RF_DR_HIGH);
+        config &= ~(1<<RF_DR_LOW);
+        break;
+    case RF24_2MBPS:
+        config |= (1<<RF_DR_HIGH);
+        config &= ~(1<<RF_DR_LOW);
+        break;
+    case RF24_250KBPS:
+        config &= ~(1<<RF_DR_HIGH);
+        config |= (1<<RF_DR_LOW);
+        break;
+    default:
+        break;
+    }
+    
+    //signal strengh
+    config = config & 0xF9;
+    config = config | (strengh << 1);
+
+    rf24_write_reg(RF_SETUP, config);
 }
