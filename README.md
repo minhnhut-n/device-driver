@@ -14,8 +14,8 @@ This project provides an nRF24L01+ driver for STM32 (HAL-based). The popular Ard
 Make sure the hardware wiring and power are solid before debugging the code. A noisy 3.3V rail or poor routing can corrupt packets and make the software look wrong.
 My work is mess up for long time to understand what happened on my tranmition until I know that due to my "trash" route of signal.
 
-![Test board](../../docs/test_board.png)
-![Overview](../../docs/Overview.png)
+![Test board](docs/test_board.png)
+![Overview](docs/Overview.png)
 
 ### Software
 
@@ -28,10 +28,10 @@ My work is mess up for long time to understand what happened on my tranmition un
 ### Configuration Screens (Reference)
 These are the settings used in the sample project.
 
-![System clock](../../docs/System%20clock%20configs.png)
-![GPIO](../../docs/GPIO_Configuration.png)
-![SPI](../../docs/SPI_Configuration.png)
-![UART](../../docs/UART_for_serial_debug.png)
+![System clock](docs/System%20clock%20configs.png)
+![GPIO](docs/GPIO_Configuration.png)
+![SPI](docs/SPI_Configuration.png)
+![UART](docs/UART_for_serial_debug.png)
 
 ## Usage
 Use the sample from `rf24_sample` as a reference. Basic flow:
